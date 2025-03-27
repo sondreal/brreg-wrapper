@@ -47,6 +47,19 @@ async def test_get_enhet_success(httpx_mock: HTTPXMock):
 
 
 @pytest.mark.asyncio
+async def test_async_context_manager():
+    """Test that the client works correctly as an async context manager."""
+    async with BrregClient() as client:
+        assert client is not None
+        # Check if the underlying httpx client is created
+        assert isinstance(client._client, httpx.AsyncClient)
+        # No explicit close needed here, __aexit__ handles it.
+
+    # Optional: Add more checks after the context manager exits if needed,
+    # e.g., mocking aclose to ensure it was called.
+
+
+@pytest.mark.asyncio
 async def test_get_enhet_not_found(httpx_mock: HTTPXMock):
     """Test handling of a 404 Not Found error when retrieving an entity."""
     org_nr = "123456789"

@@ -65,6 +65,16 @@ class BrregClient:
             # Re-raise or handle specific errors as needed
             raise
 
+    async def __aenter__(self):
+        """Enter the async context manager."""
+        # Optionally, perform setup here if needed,
+        # but in this case, the client is already initialized.
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the async context manager and close the client."""
+        await self.close()
+
     async def close(self):
         """Closes the underlying httpx client."""
         await self._client.aclose()
