@@ -26,7 +26,7 @@ Get started in seconds:
 ```bash
 pip install brreg-wrapper
 # Or using uv:
-# uv pip install brreg-wrapper
+uv add brreg-wrapper
 ```
 
 ## 💡 Usage Example
