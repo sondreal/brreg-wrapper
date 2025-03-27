@@ -13,159 +13,162 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 class InternalServerError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     timestamp: str = Field(
         ...,
-        description='Tidspunkter for når feilen oppstod',
-        examples=['2024-01-05T07:36:21.523+0000'],
+        description="Tidspunkter for når feilen oppstod",
+        examples=["2024-01-05T07:36:21.523+0000"],
     )
-    status: float = Field(..., description='HTTP status koden', examples=[500])
+    status: float = Field(..., description="HTTP status koden", examples=[500])
     error: str = Field(
-        ..., description='Feilmelding', examples=['Internal Server Error']
+        ..., description="Feilmelding", examples=["Internal Server Error"]
     )
     message: str = Field(
-        ..., description='Utdypende feilmelding', examples=['Internal Server Error']
+        ..., description="Utdypende feilmelding", examples=["Internal Server Error"]
     )
     path: str = Field(
         ...,
-        description='Url sti som feilet',
-        examples=['/enhetsregisteret/api/enheter'],
+        description="Url sti som feilet",
+        examples=["/enhetsregisteret/api/enheter"],
     )
     trace: str = Field(
         ...,
-        description='Send denne koden til oss for at vi skal lettere finne igjen feilen i våre logger',
-        examples=['b94669c0-425a-4b6c-ab30-504de8d9c127'],
+        description=(
+            "Send denne koden til oss for at vi skal lettere finne igjen feilen i våre "
+            "logger"
+        ),
+        examples=["b94669c0-425a-4b6c-ab30-504de8d9c127"],
     )
 
 
 class Self(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api"],
     )
 
 
 class Enheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til enheter ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter'],
+        description="Lenke til enheter ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter"],
     )
 
 
 class Underenheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til underenheter ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/underenheter'],
+        description="Lenke til underenheter ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/underenheter"],
     )
 
 
 class Organisasjonsformer(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til organisasjonsformer ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/organisasjonsformer'],
+        description="Lenke til organisasjonsformer ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/organisasjonsformer"],
     )
 
 
 class OppdateringerEnheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til enhetsoppdateringer ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter'],
+        description="Lenke til enhetsoppdateringer ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter"],
     )
 
 
 class OppdateringerUnderenheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til underenhetsoppdateringer ressurs',
+        description="Lenke til underenhetsoppdateringer ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter"
         ],
     )
 
 
 class Kommuner(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til kommuner ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner'],
+        description="Lenke til kommuner ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner"],
     )
 
 
 class FieldLinks(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Self
     enheter: Enheter
     underenheter: Underenheter
     organisasjonsformer: Organisasjonsformer
     oppdateringer_enheter: OppdateringerEnheter = Field(
-        ..., alias='oppdateringer/enheter'
+        ..., alias="oppdateringer/enheter"
     )
     oppdateringer_underenheter: OppdateringerUnderenheter = Field(
-        ..., alias='oppdateringer/underenheter'
+        ..., alias="oppdateringer/underenheter"
     )
     kommuner: Kommuner
 
 
 class Root(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks] = Field(None, alias="_links")
 
 
 class LegacyPaategning(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     infotype: Optional[str] = Field(
-        None, description='Påtegningens infotype', examples=['NAVN']
+        None, description="Påtegningens infotype", examples=["NAVN"]
     )
     tekst: Optional[str] = Field(
         None,
-        description='Påtegningens tekstlig innhold',
-        examples=['Eksempelpåtegning på navn'],
+        description="Påtegningens tekstlig innhold",
+        examples=["Eksempelpåtegning på navn"],
     )
     innfoertDato: Optional[date] = Field(
-        None, description='Dato for når påtegning ble innført', examples=['2024-01-04']
+        None, description="Dato for når påtegning ble innført", examples=["2024-01-04"]
     )
 
 
 class Self1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
             '"https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/ASA"'
         ],
@@ -174,170 +177,170 @@ class Self1(BaseModel):
 
 class FieldLinks1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self1] = None
 
 
 class Organisasjonsform(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks1] = Field(None, alias='_links')
-    kode: str = Field(..., description='Organisasjonsformen', examples=['ASA'])
+    field_links: Optional[FieldLinks1] = Field(None, alias="_links")
+    kode: str = Field(..., description="Organisasjonsformen", examples=["ASA"])
     utgaatt: Optional[str] = Field(
         None,
-        description='Dato når organisasjonsformen evt. ble ugyldig',
-        examples=['2024-01-04'],
+        description="Dato når organisasjonsformen evt. ble ugyldig",
+        examples=["2024-01-04"],
     )
     beskrivelse: str = Field(
         ...,
-        description='Tekstlig beskrivelse av organisasjonsformen',
-        examples=['Allmennaksjeselskap'],
+        description="Tekstlig beskrivelse av organisasjonsformen",
+        examples=["Allmennaksjeselskap"],
     )
 
 
 class Postadresse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kommune: Optional[str] = Field(
-        None, description='Kommunenavn (postadresse)', examples=['Oslo']
+        None, description="Kommunenavn (postadresse)", examples=["Oslo"]
     )
     landkode: Optional[str] = Field(
-        None, description='Landkode (postadresse)', examples=['NO']
+        None, description="Landkode (postadresse)", examples=["NO"]
     )
     postnummer: Optional[str] = Field(
-        None, description='Postnummer (postadresse)', examples=['0010']
+        None, description="Postnummer (postadresse)", examples=["0010"]
     )
     adresse: Optional[Sequence[str]] = Field(
-        None, description='Adresse (postadresse)', examples=[['Oslo']]
+        None, description="Adresse (postadresse)", examples=[["Oslo"]]
     )
     land: Optional[str] = Field(
-        None, description='Landkode (postadresse)', examples=['Norge']
+        None, description="Landkode (postadresse)", examples=["Norge"]
     )
     kommunenummer: Optional[str] = Field(
-        None, description='Kommunenummer (postadresse)', examples=['0301']
+        None, description="Kommunenummer (postadresse)", examples=["0301"]
     )
     poststed: Optional[str] = Field(
-        None, description='Poststed (postadresse)', examples=['Oslo']
+        None, description="Poststed (postadresse)", examples=["Oslo"]
     )
 
 
 class Forretningsadresse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kommune: Optional[str] = Field(
-        None, description='Kommunenavn (forretningsadresse)', examples=['Oslo']
+        None, description="Kommunenavn (forretningsadresse)", examples=["Oslo"]
     )
     landkode: Optional[str] = Field(
-        None, description='Landkode (forretningsadresse)', examples=['NO']
+        None, description="Landkode (forretningsadresse)", examples=["NO"]
     )
     postnummer: Optional[str] = Field(
-        None, description='Postnummer (forretningsadresse)', examples=['0010']
+        None, description="Postnummer (forretningsadresse)", examples=["0010"]
     )
     adresse: Optional[Sequence[str]] = Field(
-        None, description='Adresse (forretningsadresse)', examples=[['Oslo']]
+        None, description="Adresse (forretningsadresse)", examples=[["Oslo"]]
     )
     land: Optional[str] = Field(
-        None, description='Land (forretningsadresse)', examples=['Norge']
+        None, description="Land (forretningsadresse)", examples=["Norge"]
     )
     kommunenummer: Optional[str] = Field(
-        None, description='Kommunenummer (forretningsadresse)', examples=['0301']
+        None, description="Kommunenummer (forretningsadresse)", examples=["0301"]
     )
     poststed: Optional[str] = Field(
-        None, description='Poststed (forretningsadresse)', examples=['Oslo']
+        None, description="Poststed (forretningsadresse)", examples=["Oslo"]
     )
 
 
 class Naeringskode1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: Optional[str] = Field(None, description='Næringskoden', examples=['41.109'])
+    kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
         None,
-        description='Tekstlig beskrivelse av næringskoden',
-        examples=['Utvikling og salg av egen fast eiendom ellers'],
+        description="Tekstlig beskrivelse av næringskoden",
+        examples=["Utvikling og salg av egen fast eiendom ellers"],
     )
 
 
 class Naeringskode2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: Optional[str] = Field(None, description='Næringskoden', examples=['41.109'])
+    kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
         None,
-        description='Tekstlig beskrivelse av næringskoden',
-        examples=['Utvikling og salg av egen fast eiendom ellers'],
+        description="Tekstlig beskrivelse av næringskoden",
+        examples=["Utvikling og salg av egen fast eiendom ellers"],
     )
 
 
 class Naeringskode3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: Optional[str] = Field(None, description='Næringskoden', examples=['41.109'])
+    kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
         None,
-        description='Tekstlig beskrivelse av næringskoden',
-        examples=['Utvikling og salg av egen fast eiendom ellers'],
+        description="Tekstlig beskrivelse av næringskoden",
+        examples=["Utvikling og salg av egen fast eiendom ellers"],
     )
 
 
 class Hjelpeenhetskode(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kode: Optional[str] = Field(
-        None, description='Hjelpeenhetskode', examples=['70.100']
+        None, description="Hjelpeenhetskode", examples=["70.100"]
     )
     beskrivelse: Optional[str] = Field(
         None,
-        description='Tekstlig beskrivelse av hjelpeenhetskode',
-        examples=['Hovedkontortjenester'],
+        description="Tekstlig beskrivelse av hjelpeenhetskode",
+        examples=["Hovedkontortjenester"],
     )
 
 
 class InstitusjonellSektorkode(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: Optional[str] = Field(None, description='Sektorkoden', examples=['8200'])
+    kode: Optional[str] = Field(None, description="Sektorkoden", examples=["8200"])
     beskrivelse: Optional[str] = Field(
         None,
-        description='Tekstlig beskrivelse av sektorkoden',
-        examples=['Personlig næringsdrivende'],
+        description="Tekstlig beskrivelse av sektorkoden",
+        examples=["Personlig næringsdrivende"],
     )
 
 
 class OverordnetEnhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til enhetens overordnede enhet i offentlig sektor',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/509100675'],
+        description="Lenke til enhetens overordnede enhet i offentlig sektor",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/509100675"],
     )
 
 
 class Self2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/509100675'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/509100675"],
     )
 
 
 class FieldLinks2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     overordnetEnhet: Optional[OverordnetEnhet] = None
     self: Optional[Self2] = None
@@ -345,289 +348,307 @@ class FieldLinks2(BaseModel):
 
 class Enhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    respons_klasse: Optional[Literal['Enhet']] = None
+    respons_klasse: Optional[Literal["Enhet"]] = None
     organisasjonsnummer: str = Field(
-        ..., description='Organisasjonsnummeret til enheten', examples=['509100675']
+        ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
     )
-    navn: str = Field(..., description='Enhetens navn', examples=['Sesam stasjon'])
+    navn: str = Field(..., description="Enhetens navn", examples=["Sesam stasjon"])
     organisasjonsform: Organisasjonsform = Field(
-        ..., description='Enhetens organisasjonsform'
+        ..., description="Enhetens organisasjonsform"
     )
-    postadresse: Optional[Postadresse] = Field(None, description='Enhetens postadresse')
+    postadresse: Optional[Postadresse] = Field(None, description="Enhetens postadresse")
     forretningsadresse: Optional[Forretningsadresse] = Field(
-        None, description='Enhetens forretningsadresse'
+        None, description="Enhetens forretningsadresse"
     )
     registrertIMvaregisteret: bool = Field(
         ...,
-        description='Hvorvidt enheten er registrert i Mva-registeret',
+        description="Hvorvidt enheten er registrert i Mva-registeret",
         examples=[True],
     )
-    maalform: str = Field(..., description='Målform', examples=['Bokmål'])
-    naeringskode1: Optional[Naeringskode1] = Field(None, description='Næringskode 1')
-    naeringskode2: Optional[Naeringskode2] = Field(None, description='Næringskode 2')
-    naeringskode3: Optional[Naeringskode3] = Field(None, description='Næringskode 3')
+    maalform: str = Field(..., description="Målform", examples=["Bokmål"])
+    naeringskode1: Optional[Naeringskode1] = Field(None, description="Næringskode 1")
+    naeringskode2: Optional[Naeringskode2] = Field(None, description="Næringskode 2")
+    naeringskode3: Optional[Naeringskode3] = Field(None, description="Næringskode 3")
     hjelpeenhetskode: Optional[Hjelpeenhetskode] = Field(
-        None, description='Hjelpeenhetskode'
+        None, description="Hjelpeenhetskode"
     )
     underAvvikling: bool = Field(
-        ..., description='Hvorvidt enheten er under avvikling', examples=[True]
+        ..., description="Hvorvidt enheten er under avvikling", examples=[True]
     )
     underAvviklingDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten er meldt oppløst. Format: yyyy-MM-dd',
-        examples=['2024-01-04'],
+        description="Dato virksomheten er meldt oppløst. Format: yyyy-MM-dd",
+        examples=["2024-01-04"],
     )
     registrertIStiftelsesregisteret: bool = Field(
         ...,
-        description='Hvorvidt enheten er registrert i Stiftelsesregisteret',
+        description="Hvorvidt enheten er registrert i Stiftelsesregisteret",
         examples=[True],
     )
     konkurs: bool = Field(
-        ..., description='Hvorvidt enheten er konkurs', examples=[True]
+        ..., description="Hvorvidt enheten er konkurs", examples=[True]
     )
     konkursdato: Optional[date] = Field(
         None,
-        description='Kjennelsesdato for konkursen. Format: yyyy-MM-dd',
-        examples=['2024-01-04'],
+        description="Kjennelsesdato for konkursen. Format: yyyy-MM-dd",
+        examples=["2024-01-04"],
     )
     tvangsavvikletPgaManglendeSlettingDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten ble tvangsavviklet pga manglende sletting. Format: yyyy-mm-dd',
-        examples=['2024-01-04'],
+        description=(
+            "Dato virksomheten ble tvangsavviklet pga manglende sletting. Format: "
+            "yyyy-mm-dd"
+        ),
+        examples=["2024-01-04"],
     )
     tvangsopplostPgaManglendeDagligLederDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten ble tvangsoppløst pga manglende daglig leder. Format: yyyy-mm-dd',
-        examples=['2024-01-04'],
+        description=(
+            "Dato virksomheten ble tvangsoppløst pga manglende daglig leder. Format: "
+            "yyyy-mm-dd"
+        ),
+        examples=["2024-01-04"],
     )
     tvangsopplostPgaManglendeRevisorDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten ble tvangsoppløst pga manglende revisor. Format: yyyy-mm-dd',
-        examples=['2024-01-04'],
+        description=(
+            "Dato virksomheten ble tvangsoppløst pga manglende revisor. Format: "
+            "yyyy-mm-dd"
+        ),
+        examples=["2024-01-04"],
     )
     tvangsopplostPgaManglendeRegnskapDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten ble tvangsoppløst pga manglende regnskap. Format: yyyy-mm-dd',
-        examples=['2024-01-04'],
+        description=(
+            "Dato virksomheten ble tvangsoppløst pga manglende regnskap. Format: "
+            "yyyy-mm-dd"
+        ),
+        examples=["2024-01-04"],
     )
     tvangsopplostPgaMangelfulltStyreDato: Optional[date] = Field(
         None,
-        description='Dato virksomheten ble tvangsoppløst pga manglende styre. Format: yyyy-mm-dd',
-        examples=['2024-01-04'],
+        description=(
+            "Dato virksomheten ble tvangsoppløst pga manglende styre. Format: "
+            "yyyy-mm-dd"
+        ),
+        examples=["2024-01-04"],
     )
     vedtektsdato: Optional[date] = Field(
         None,
-        description='Enhetens vedtektsdato. Format: yyyy-MM-dd',
-        examples=['2024-01-04'],
+        description="Enhetens vedtektsdato. Format: yyyy-MM-dd",
+        examples=["2024-01-04"],
     )
     vedtektsfestetFormaal: Optional[Sequence[str]] = Field(
-        None, description='Enhetens formål'
+        None, description="Enhetens formål"
     )
-    aktivitet: Optional[Sequence[str]] = Field(None, description='Enhetens aktivitet')
+    aktivitet: Optional[Sequence[str]] = Field(None, description="Enhetens aktivitet")
     paategninger: Optional[Sequence[LegacyPaategning]] = Field(
         None,
-        description='Enhetens påtegninger',
+        description="Enhetens påtegninger",
         examples=[
             [
                 {
-                    'infotype': 'NAVN',
-                    'tekst': 'Påtegning på navn',
-                    'innfoertDato': '2024-01-01',
+                    "infotype": "NAVN",
+                    "tekst": "Påtegning på navn",
+                    "innfoertDato": "2024-01-01",
                 },
                 {
-                    'infotype': 'FADR',
-                    'tekst': 'Påtegning på forretningsadresse',
-                    'innfoertDato': '2024-01-01',
+                    "infotype": "FADR",
+                    "tekst": "Påtegning på forretningsadresse",
+                    "innfoertDato": "2024-01-01",
                 },
             ]
         ],
     )
     registrertIFrivillighetsregisteret: bool = Field(
         ...,
-        description='Hvorvidt enheten er registrert i Frivillighetsregisteret',
+        description="Hvorvidt enheten er registrert i Frivillighetsregisteret",
         examples=[True],
     )
     stiftelsesdato: Optional[date] = Field(
-        None, description='Enhetens stiftelsesdato', examples=['2024-01-04']
+        None, description="Enhetens stiftelsesdato", examples=["2024-01-04"]
     )
     institusjonellSektorkode: Optional[InstitusjonellSektorkode] = Field(
-        None, description='Enhetens institusjonelle sektorkode'
+        None, description="Enhetens institusjonelle sektorkode"
     )
     registrertIForetaksregisteret: bool = Field(
         ...,
-        description='Hvorvidt enheten er registrert i Foretaksregisteret',
+        description="Hvorvidt enheten er registrert i Foretaksregisteret",
         examples=[True],
     )
     registreringsdatoEnhetsregisteret: date = Field(
         ...,
-        description='Enhetens registreringsdato i Enhetsregisteret',
-        examples=['2024-01-04'],
+        description="Enhetens registreringsdato i Enhetsregisteret",
+        examples=["2024-01-04"],
     )
     hjemmeside: Optional[str] = Field(
-        None, description='Enhetens hjemmeside', examples=['www.brreg.no']
+        None, description="Enhetens hjemmeside", examples=["www.brreg.no"]
     )
     sisteInnsendteAarsregnskap: Optional[str] = Field(
-        None, description='Årstall for siste innsendte årsregnskap', examples=['2024']
+        None, description="Årstall for siste innsendte årsregnskap", examples=["2024"]
     )
     frivilligMvaRegistrertBeskrivelser: Optional[Sequence[str]] = Field(
         None,
-        description='Enheter som i utgangspunktet ikke er mva-pliktig, kan søke om frivillig registrering i Merverdiavgiftsregisteret.',
-        examples=[['Utleier av bygg eller anlegg']],
+        description=(
+            "Enheter som i utgangspunktet ikke er mva-pliktig, kan søke om frivillig "
+            "registrering i Merverdiavgiftsregisteret."
+        ),
+        examples=[["Utleier av bygg eller anlegg"]],
     )
     underTvangsavviklingEllerTvangsopplosning: bool = Field(
         ...,
-        description='Hvorvidt enheten er under tvangsavvikling eller tvangsoppløsning',
+        description="Hvorvidt enheten er under tvangsavvikling eller tvangsoppløsning",
         examples=[True],
     )
     antallAnsatte: Optional[float] = Field(
-        None, description='Antall ansatte', examples=[50]
+        None, description="Antall ansatte", examples=[50]
     )
     harRegistrertAntallAnsatte: bool = Field(
-        ..., description='Angir om enheten har registrert ansatte', examples=[True]
+        ..., description="Angir om enheten har registrert ansatte", examples=[True]
     )
     overordnetEnhet: Optional[str] = Field(
         None,
-        description='Organisasjonsnummeret til overordnet enhet i offentlig sektor',
-        examples=['376181782'],
+        description="Organisasjonsnummeret til overordnet enhet i offentlig sektor",
+        examples=["376181782"],
     )
     registreringsnummerIHjemlandet: Optional[str] = Field(
         None,
-        description='Registreringsnummeret i hjemlandets register',
-        examples=['0000804843'],
+        description="Registreringsnummeret i hjemlandets register",
+        examples=["0000804843"],
     )
     registreringsdatoAntallAnsatteNAVAaregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering av antall ansatte i NAV Aa-register',
-        examples=['2024-01-04'],
+        description="Dato for registrering av antall ansatte i NAV Aa-register",
+        examples=["2024-01-04"],
     )
     registreringsdatoAntallAnsatteEnhetsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering av antall ansatte i Enhetsregisteret',
-        examples=['2024-01-04'],
+        description="Dato for registrering av antall ansatte i Enhetsregisteret",
+        examples=["2024-01-04"],
     )
     registreringsdatoMerverdiavgiftsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i Mva-registeret',
-        examples=['2024-01-04'],
+        description="Dato for registrering i Mva-registeret",
+        examples=["2024-01-04"],
     )
     registreringsdatoMerverdiavgiftsregisteretEnhetsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i Mva-registeret i Enhetsregisteret.',
-        examples=['2024-01-04'],
+        description="Dato for registrering i Mva-registeret i Enhetsregisteret.",
+        examples=["2024-01-04"],
     )
     registreringsdatoFrivilligMerverdiavgiftsregisteret: Optional[date] = Field(
         None,
-        description='Dato for frivillig registrering i Mva-registeret',
-        examples=['2024-01-04'],
+        description="Dato for frivillig registrering i Mva-registeret",
+        examples=["2024-01-04"],
     )
     registreringsdatoForetaksregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i Foretaksregisteret',
-        examples=['2024-01-04'],
+        description="Dato for registrering i Foretaksregisteret",
+        examples=["2024-01-04"],
     )
     registreringsdatoFrivillighetsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i Frivillighetsregisteret',
-        examples=['2024-01-04'],
+        description="Dato for registrering i Frivillighetsregisteret",
+        examples=["2024-01-04"],
     )
     registrertIPartiregisteret: Optional[bool] = Field(
         None,
-        description='Hvorvidt enheten er registrert i Partiregisteret',
+        description="Hvorvidt enheten er registrert i Partiregisteret",
         examples=[True],
     )
     registreringsdatoPartiregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i Partiregisteret',
-        examples=['2024-01-04'],
+        description="Dato for registrering i Partiregisteret",
+        examples=["2024-01-04"],
     )
     epostadresse: Optional[str] = Field(
-        None, description='Enhetens epostadressse', examples=['epost@epost.com']
+        None, description="Enhetens epostadressse", examples=["epost@epost.com"]
     )
     telefon: Optional[str] = Field(
-        None, description='Enhetens telefonnummer', examples=['91504800']
+        None, description="Enhetens telefonnummer", examples=["91504800"]
     )
     mobil: Optional[str] = Field(
-        None, description='Enhetens mobilnummer', examples=['91504800']
+        None, description="Enhetens mobilnummer", examples=["91504800"]
     )
-    field_links: Optional[FieldLinks2] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks2] = Field(None, alias="_links")
 
 
 class Page(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    number: float = Field(..., description='Nummer på gjeldende side', examples=[1])
-    size: float = Field(..., description='Sidestørrelse på resultatet', examples=[20])
+    number: float = Field(..., description="Nummer på gjeldende side", examples=[1])
+    size: float = Field(..., description="Sidestørrelse på resultatet", examples=[20])
     totalPages: float = Field(
-        ..., description='Totalt antall sider i resultatet', examples=[20]
+        ..., description="Totalt antall sider i resultatet", examples=[20]
     )
     totalElements: float = Field(
-        ..., description='Totalt antall elementer i resultatet', examples=[100]
+        ..., description="Totalt antall elementer i resultatet", examples=[100]
     )
 
 
 class Next(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til neste side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter?page=1&size=20'],
+        description="Lenke til neste side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter?page=1&size=20"],
     )
 
 
 class Last(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til siste side med resultater',
+        description="Lenke til siste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/enheter?page=54469&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/enheter?page=54469&size=20"
         ],
     )
 
 
 class Prev(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til forrige side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter?page=0&size=20'],
+        description="Lenke til forrige side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter?page=0&size=20"],
     )
 
 
 class Self3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter"],
     )
 
 
 class First(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til første side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter?page=0&size=20'],
+        description="Lenke til første side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter?page=0&size=20"],
     )
 
 
 class FieldLinks3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     next: Optional[Next] = None
     last: Optional[Last] = None
@@ -638,65 +659,65 @@ class FieldLinks3(BaseModel):
 
 class FieldEmbedded(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     enheter: Optional[Sequence[Enhet]] = Field(
-        None, description='En liste av enheter som finnes i Enhetsregisteret'
+        None, description="En liste av enheter som finnes i Enhetsregisteret"
     )
 
 
 class Enheter1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: FieldLinks3 = Field(..., alias='_links')
-    field_embedded: Optional[FieldEmbedded] = Field(None, alias='_embedded')
+    field_links: FieldLinks3 = Field(..., alias="_links")
+    field_embedded: Optional[FieldEmbedded] = Field(None, alias="_embedded")
     page: Page
 
 
 class ValideringsFeil(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     feilaktigVerdi: Optional[str] = Field(
-        None, description='Current value', examples=['[INC]']
+        None, description="Current value", examples=["[INC]"]
     )
     feilmelding: str = Field(
         ...,
-        description='Error message for current validation error',
-        examples=['INC er ikke en gyldig organisasjonsform'],
+        description="Error message for current validation error",
+        examples=["INC er ikke en gyldig organisasjonsform"],
     )
     parametere: Sequence[str] = Field(
-        ..., description='Current parameters', examples=[['organisasjonsform']]
+        ..., description="Current parameters", examples=[["organisasjonsform"]]
     )
 
 
 class BadRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    antallFeil: float = Field(..., description='Number of errors', examples=[4])
+    antallFeil: float = Field(..., description="Number of errors", examples=[4])
     valideringsfeil: Sequence[ValideringsFeil] = Field(
         ...,
-        description='The validation errors',
+        description="The validation errors",
         examples=[
             [
                 {
-                    'feilmelding': 'VYuW94MNgw',
-                    'feilaktigVerdi': 'TNpG8ziEFi',
-                    'parametere': ['beNB4EGRsf'],
+                    "feilmelding": "VYuW94MNgw",
+                    "feilaktigVerdi": "TNpG8ziEFi",
+                    "parametere": ["beNB4EGRsf"],
                 }
             ]
         ],
     )
     sti: str = Field(
-        ..., description='The path to the endpoint that failed', examples=['cfQRiNgGtG']
+        ..., description="The path to the endpoint that failed", examples=["cfQRiNgGtG"]
     )
-    feilmelding: str = Field(..., description='Error message', examples=['GqDEbwc71f'])
+    feilmelding: str = Field(..., description="Error message", examples=["GqDEbwc71f"])
     tidsstempel: float = Field(
-        ..., description='Timestamp for when the error occurred', examples=[1704366191]
+        ..., description="Timestamp for when the error occurred", examples=[1704366191]
     )
-    status: float = Field(..., description='HTTP status code', examples=[500])
+    status: float = Field(..., description="HTTP status code", examples=[500])
 
 
 class EnheterLastned(RootModel[bytes]):
@@ -705,289 +726,291 @@ class EnheterLastned(RootModel[bytes]):
 
 class Self4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/ASA'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/ASA"],
     )
 
 
 class FieldLinks4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self4] = None
 
 
 class Organisasjonsform1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks4] = Field(None, alias='_links')
-    kode: str = Field(..., description='Organisasjonsformen', examples=['ASA'])
+    field_links: Optional[FieldLinks4] = Field(None, alias="_links")
+    kode: str = Field(..., description="Organisasjonsformen", examples=["ASA"])
     utgaatt: Optional[str] = Field(
         None,
-        description='Dato når organisasjonsformen evt. ble ugyldig',
-        examples=['2024-01-04'],
+        description="Dato når organisasjonsformen evt. ble ugyldig",
+        examples=["2024-01-04"],
     )
     beskrivelse: str = Field(
         ...,
-        description='Tekstlig beskrivelse av organisasjonsformen',
-        examples=['Allmennaksjeselskap'],
+        description="Tekstlig beskrivelse av organisasjonsformen",
+        examples=["Allmennaksjeselskap"],
     )
 
 
 class Self5(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/509100675'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/509100675"],
     )
 
 
 class FieldLinks5(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self5] = None
 
 
 class SlettetEnhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    respons_klasse: Optional[Literal['SlettetEnhet']] = None
+    respons_klasse: Optional[Literal["SlettetEnhet"]] = None
     organisasjonsnummer: str = Field(
-        ..., description='Organisasjonsnummeret til enheten', examples=['509100675']
+        ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
     )
-    navn: str = Field(..., description='Enhetens navn', examples=['Sesam stasjon'])
+    navn: str = Field(..., description="Enhetens navn", examples=["Sesam stasjon"])
     organisasjonsform: Organisasjonsform1
     slettedato: str = Field(
-        ..., description='Dato enheten ble slettet', examples=['2024-03-09']
+        ..., description="Dato enheten ble slettet", examples=["2024-03-09"]
     )
-    field_links: Optional[FieldLinks5] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks5] = Field(None, alias="_links")
 
 
 class FieldLinks6(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self5] = None
 
 
 class GoneEnhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     organisasjonsnummer: str = Field(
-        ..., description='Organisasjonsnummeret til enheten', examples=['509100675']
+        ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
     )
     slettedato: str = Field(
-        ..., description='Dato enheten ble slettet', examples=['2024-03-09']
+        ..., description="Dato enheten ble slettet", examples=["2024-03-09"]
     )
-    field_links: Optional[FieldLinks6] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks6] = Field(None, alias="_links")
 
 
 class Self7(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper/ADOS'
+            "https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper/ADOS"
         ],
     )
 
 
 class FieldLinks7(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self7] = None
 
 
 class RolleRollegruppetype(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: str = Field(..., description='Koden', examples=['ADOS'])
+    kode: str = Field(..., description="Koden", examples=["ADOS"])
     beskrivelse: str = Field(
         ...,
-        description='Beskrivelsen',
-        examples=['Administrativ enhet - offentlig sektor'],
+        description="Beskrivelsen",
+        examples=["Administrativ enhet - offentlig sektor"],
     )
-    field_links: Optional[FieldLinks7] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks7] = Field(None, alias="_links")
 
 
 class Self8(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/roller/rolletyper/ADOS'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/roller/rolletyper/ADOS"],
     )
 
 
 class FieldLinks8(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self8] = None
 
 
 class RolleRolletype(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: str = Field(..., description='Koden', examples=['ADOS'])
+    kode: str = Field(..., description="Koden", examples=["ADOS"])
     beskrivelse: str = Field(
         ...,
-        description='Beskrivelsen',
-        examples=['Administrativ enhet - offentlig sektor'],
+        description="Beskrivelsen",
+        examples=["Administrativ enhet - offentlig sektor"],
     )
-    field_links: Optional[FieldLinks8] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks8] = Field(None, alias="_links")
 
 
 class Navn(BaseModel):
-    fornavn: str = Field(..., description='Personens fornavn', examples=['fornavn'])
+    fornavn: str = Field(..., description="Personens fornavn", examples=["fornavn"])
     mellomnavn: Optional[str] = Field(
-        None, description='Personens mellomnavn', examples=['mellomnavn']
+        None, description="Personens mellomnavn", examples=["mellomnavn"]
     )
     etternavn: str = Field(
-        ..., description='Personens etternavn', examples=['etternavn']
+        ..., description="Personens etternavn", examples=["etternavn"]
     )
 
 
 class RollePerson(BaseModel):
-    navn: Navn = Field(..., description='Personens navn')
+    navn: Navn = Field(..., description="Personens navn")
     fodselsdato: str = Field(
-        ..., description='Personens fødselsdato', examples=['1979-01-01']
+        ..., description="Personens fødselsdato", examples=["1979-01-01"]
     )
-    erDoed: bool = Field(..., description='Er personen død', examples=[False])
+    erDoed: bool = Field(..., description="Er personen død", examples=[False])
 
 
 class Self9(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/154020209'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/154020209"],
     )
 
 
 class FieldLinks9(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self9] = None
 
 
 class RolleEnhet(BaseModel):
     organisasjonsnummer: str = Field(
-        ..., description='Organisasjonsnummeret til enheten', examples=['154020209']
+        ..., description="Organisasjonsnummeret til enheten", examples=["154020209"]
     )
     organisasjonsform: Organisasjonsform1
     navn: Sequence[str] = Field(
-        ..., description='Enhetens navn', examples=[['Sesam', 'Stasjon']]
+        ..., description="Enhetens navn", examples=[["Sesam", "Stasjon"]]
     )
-    erSlettet: bool = Field(..., description='Er slettet', examples=[False])
-    field_links: Optional[FieldLinks9] = Field(None, alias='_links')
+    erSlettet: bool = Field(..., description="Er slettet", examples=[False])
+    field_links: Optional[FieldLinks9] = Field(None, alias="_links")
 
 
 class Self10(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/roller/representanter/A-AK'
+            "https://data.brreg.no/enhetsregisteret/api/roller/representanter/A-AK"
         ],
     )
 
 
 class FieldLinks10(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self10] = None
 
 
 class RolleValgtAv(BaseModel):
-    kode: Optional[str] = Field(None, description='Koden', examples=['A-AK'])
+    kode: Optional[str] = Field(None, description="Koden", examples=["A-AK"])
     beskrivelse: Optional[str] = Field(
         None,
-        description='Beskrivelse tilknyttet koden',
-        examples=['Representant for A-aksjonærene'],
+        description="Beskrivelse tilknyttet koden",
+        examples=["Representant for A-aksjonærene"],
     )
-    field_links: Optional[FieldLinks10] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks10] = Field(None, alias="_links")
 
 
 class Rolle(BaseModel):
     type: Optional[RolleRolletype] = None
     person: Optional[RollePerson] = None
     enhet: Optional[RolleEnhet] = None
-    fratraadt: Optional[bool] = Field(None, description='Er fratrådt', examples=[False])
-    rekkefolge: Optional[float] = Field(None, description='Rekkefølge', examples=[1])
+    fratraadt: Optional[bool] = Field(None, description="Er fratrådt", examples=[False])
+    rekkefolge: Optional[float] = Field(None, description="Rekkefølge", examples=[1])
     ansvarsandel: Optional[str] = Field(
         None,
-        description='Rollens ansvarsandel for selskapets forpliktelser, i brøk eller prosent',
-        examples=['50%'],
+        description=(
+            "Rollens ansvarsandel for selskapets forpliktelser, i brøk eller prosent"
+        ),
+        examples=["50%"],
     )
     valgtAv: Optional[RolleValgtAv] = None
     stadfestetFremtidsfullmakt: Optional[bool] = Field(
-        None, description='Stadfestet fremtidsfullmakt', examples=[False]
+        None, description="Stadfestet fremtidsfullmakt", examples=[False]
     )
     begrensetRettsligHandleevne: Optional[bool] = Field(
-        None, description='Begrenset rettslig handleevne', examples=[False]
+        None, description="Begrenset rettslig handleevne", examples=[False]
     )
 
 
 class RollegrupperItem(BaseModel):
     type: Optional[RolleRollegruppetype] = None
     sistEndret: Optional[str] = Field(
-        None, description='Sist endret', examples=['2019-06-19']
+        None, description="Sist endret", examples=["2019-06-19"]
     )
-    roller: Optional[Sequence[Rolle]] = Field(None, description='Liste av roller')
+    roller: Optional[Sequence[Rolle]] = Field(None, description="Liste av roller")
 
 
 class Self11(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/enheter/123456789/roller'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/enheter/123456789/roller"],
     )
 
 
 class Enhet1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til enheter ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/enheter/123456789'],
+        description="Lenke til enheter ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/enheter/123456789"],
     )
 
 
 class FieldLinks11(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self11] = None
     enhet: Optional[Enhet1] = None
@@ -995,131 +1018,131 @@ class FieldLinks11(BaseModel):
 
 class Roller(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     rollegrupper: Optional[Sequence[RollegrupperItem]] = Field(
-        None, description='Liste av rollegrupper'
+        None, description="Liste av rollegrupper"
     )
-    field_links: Optional[FieldLinks11] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks11] = Field(None, alias="_links")
 
 
 class Self12(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR'
+            "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
         ],
     )
 
 
 class FieldLinks12(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self12] = None
 
 
 class Organisasjonsform2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks12] = Field(None, alias='_links')
-    kode: str = Field(..., description='Organisasjonsformen', examples=['BEDR'])
+    field_links: Optional[FieldLinks12] = Field(None, alias="_links")
+    kode: str = Field(..., description="Organisasjonsformen", examples=["BEDR"])
     utgaatt: Optional[str] = Field(
         None,
-        description='Dato når organisasjonsformen evt. ble ugyldig',
-        examples=['2024-01-04'],
+        description="Dato når organisasjonsformen evt. ble ugyldig",
+        examples=["2024-01-04"],
     )
     beskrivelse: str = Field(
         ...,
-        description='Tekstlig beskrivelse av organisasjonsformen',
-        examples=['Underenhet til næringsdrivende og offentlig forvaltning'],
+        description="Tekstlig beskrivelse av organisasjonsformen",
+        examples=["Underenhet til næringsdrivende og offentlig forvaltning"],
     )
 
 
 class Postadresse1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kommune: Optional[str] = Field(
-        None, description='Kommunenavn (postadresse)', examples=['Oslo']
+        None, description="Kommunenavn (postadresse)", examples=["Oslo"]
     )
     landkode: Optional[str] = Field(
-        None, description='Landkode (postadresse)', examples=['NO']
+        None, description="Landkode (postadresse)", examples=["NO"]
     )
     postnummer: Optional[str] = Field(
-        None, description='Postnummer (postadresse)', examples=['0010']
+        None, description="Postnummer (postadresse)", examples=["0010"]
     )
     adresse: Optional[Sequence[str]] = Field(
-        None, description='Adresse (postadresse)', examples=[['Oslo']]
+        None, description="Adresse (postadresse)", examples=[["Oslo"]]
     )
     land: Optional[str] = Field(
-        None, description='Land (postadresse)', examples=['Norge']
+        None, description="Land (postadresse)", examples=["Norge"]
     )
     kommunenummer: Optional[str] = Field(
-        None, description='Kommunenummer (postadresse)', examples=['0301']
+        None, description="Kommunenummer (postadresse)", examples=["0301"]
     )
     poststed: Optional[str] = Field(
-        None, description='Poststed (postadresse)', examples=['Oslo']
+        None, description="Poststed (postadresse)", examples=["Oslo"]
     )
 
 
 class Beliggenhetsadresse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kommune: Optional[str] = Field(
-        None, description='Kommunenavn (beliggenhetsadresse)', examples=['Oslo']
+        None, description="Kommunenavn (beliggenhetsadresse)", examples=["Oslo"]
     )
     landkode: Optional[str] = Field(
-        None, description='Landkode (beliggenhetsadresse)', examples=['NO']
+        None, description="Landkode (beliggenhetsadresse)", examples=["NO"]
     )
     postnummer: Optional[str] = Field(
-        None, description='Postnummer (beliggenhetsadresse)', examples=['0010']
+        None, description="Postnummer (beliggenhetsadresse)", examples=["0010"]
     )
     adresse: Optional[Sequence[str]] = Field(
-        None, description='Adresse (beliggenhetsadresse)', examples=[['Oslo']]
+        None, description="Adresse (beliggenhetsadresse)", examples=[["Oslo"]]
     )
     land: Optional[str] = Field(
-        None, description='Land (beliggenhetsadresse)', examples=['Norge']
+        None, description="Land (beliggenhetsadresse)", examples=["Norge"]
     )
     kommunenummer: Optional[str] = Field(
-        None, description='Kommunenummer (beliggenhetsadresse)', examples=['0301']
+        None, description="Kommunenummer (beliggenhetsadresse)", examples=["0301"]
     )
     poststed: Optional[str] = Field(
-        None, description='Poststed (beliggenhetsadresse)', examples=['Oslo']
+        None, description="Poststed (beliggenhetsadresse)", examples=["Oslo"]
     )
 
 
 class OverordnetEnhet1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til enhetens overordnede enhet i offentlig sektor',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/376181782'],
+        description="Lenke til enhetens overordnede enhet i offentlig sektor",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/376181782"],
     )
 
 
 class Self13(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/underenheter/509100675'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/underenheter/509100675"],
     )
 
 
 class FieldLinks13(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     overordnetEnhet: Optional[OverordnetEnhet1] = None
     self: Optional[Self13] = None
@@ -1127,113 +1150,116 @@ class FieldLinks13(BaseModel):
 
 class Underenhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    respons_klasse: Optional[Literal['Underenhet']] = None
+    respons_klasse: Optional[Literal["Underenhet"]] = None
     organisasjonsnummer: str = Field(
-        ..., description='Underenhetens organisasjonsnummer', examples=['509100675']
+        ..., description="Underenhetens organisasjonsnummer", examples=["509100675"]
     )
-    navn: str = Field(..., description='Underenhetens navn', examples=['Sesam stasjon'])
+    navn: str = Field(..., description="Underenhetens navn", examples=["Sesam stasjon"])
     organisasjonsform: Organisasjonsform2 = Field(
-        ..., description='Underenhetens organisasjonsform'
+        ..., description="Underenhetens organisasjonsform"
     )
     postadresse: Optional[Postadresse1] = Field(
-        None, description='Underenhetens postadresse'
+        None, description="Underenhetens postadresse"
     )
     beliggenhetsadresse: Optional[Beliggenhetsadresse] = Field(
-        None, description='Underenhetens beliggenhetsadresse'
+        None, description="Underenhetens beliggenhetsadresse"
     )
     registrertIMvaregisteret: bool = Field(
-        ..., description='Er underenheten registrert i MVA-registeret', examples=[True]
+        ..., description="Er underenheten registrert i MVA-registeret", examples=[True]
     )
-    naeringskode1: Optional[Naeringskode1] = Field(None, description='Næringskode 1')
-    naeringskode2: Optional[Naeringskode2] = Field(None, description='Næringskode 2')
-    naeringskode3: Optional[Naeringskode3] = Field(None, description='Næringskode 3')
+    naeringskode1: Optional[Naeringskode1] = Field(None, description="Næringskode 1")
+    naeringskode2: Optional[Naeringskode2] = Field(None, description="Næringskode 2")
+    naeringskode3: Optional[Naeringskode3] = Field(None, description="Næringskode 3")
     hjelpeenhetskode: Optional[Hjelpeenhetskode] = Field(
-        None, description='Hjelpeenhetskode'
+        None, description="Hjelpeenhetskode"
     )
     registreringsdatoEnhetsregisteret: date = Field(
         ...,
-        description='Underenhetens registreringsdato i Enhetsregisteret',
-        examples=['2024-01-04'],
+        description="Underenhetens registreringsdato i Enhetsregisteret",
+        examples=["2024-01-04"],
     )
     hjemmeside: Optional[str] = Field(
-        None, description='Underenhetens hjemmeside', examples=['www.brreg.no']
+        None, description="Underenhetens hjemmeside", examples=["www.brreg.no"]
     )
     frivilligMvaRegistrertBeskrivelser: Optional[Sequence[str]] = Field(
         None,
-        description='De virksomheter som i utgangspunktet ikke er MVA-pliktig, kan søke om frivillig registrering i Merverdiavgiftsregisteret.',
-        examples=[['Utleier av bygg eller anlegg']],
+        description=(
+            "De virksomheter som i utgangspunktet ikke er MVA-pliktig, kan søke om "
+            "frivillig registrering i Merverdiavgiftsregisteret."
+        ),
+        examples=[["Utleier av bygg eller anlegg"]],
     )
     antallAnsatte: Optional[float] = Field(
-        None, description='Antall ansatte', examples=[50]
+        None, description="Antall ansatte", examples=[50]
     )
     harRegistrertAntallAnsatte: bool = Field(
-        ..., description='Angir om underenheten har registrert ansatte', examples=[True]
+        ..., description="Angir om underenheten har registrert ansatte", examples=[True]
     )
     overordnetEnhet: Optional[str] = Field(
-        None, description='Overordnet hovedenhet', examples=['376181782']
+        None, description="Overordnet hovedenhet", examples=["376181782"]
     )
     oppstartsdato: Optional[date] = Field(
-        None, description='Underenhetens oppstartsdato', examples=['2024-01-04']
+        None, description="Underenhetens oppstartsdato", examples=["2024-01-04"]
     )
     datoEierskifte: Optional[date] = Field(
-        None, description='Dato for underenhetens  eierskifte', examples=['2024-01-04']
+        None, description="Dato for underenhetens  eierskifte", examples=["2024-01-04"]
     )
     nedleggelsesdato: Optional[date] = Field(
-        None, description='Underenhetens nedleggelsesdato', examples=['2024-01-04']
+        None, description="Underenhetens nedleggelsesdato", examples=["2024-01-04"]
     )
     registreringsdatoAntallAnsatteNAVAaregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering av antall ansatte i NAV Aa-register',
-        examples=['2024-01-04'],
+        description="Dato for registrering av antall ansatte i NAV Aa-register",
+        examples=["2024-01-04"],
     )
     registreringsdatoAntallAnsatteEnhetsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering av antall ansatte i Enhetsregisteret',
-        examples=['2024-01-04'],
+        description="Dato for registrering av antall ansatte i Enhetsregisteret",
+        examples=["2024-01-04"],
     )
     registreringsdatoMerverdiavgiftsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i MVA-registeret',
-        examples=['2024-01-04'],
+        description="Dato for registrering i MVA-registeret",
+        examples=["2024-01-04"],
     )
     registreringsdatoMerverdiavgiftsregisteretEnhetsregisteret: Optional[date] = Field(
         None,
-        description='Dato for registrering i MVA-registeret i Enhetsregisteret.',
-        examples=['2024-01-04'],
+        description="Dato for registrering i MVA-registeret i Enhetsregisteret.",
+        examples=["2024-01-04"],
     )
     registreringsdatoFrivilligMerverdiavgiftsregisteret: Optional[date] = Field(
         None,
-        description='Dato for frivillig registrering i Mva-registeret',
-        examples=['2024-01-04'],
+        description="Dato for frivillig registrering i Mva-registeret",
+        examples=["2024-01-04"],
     )
     epostadresse: Optional[str] = Field(
-        None, description='Underenhetens epostadressse', examples=['epost@epost.com']
+        None, description="Underenhetens epostadressse", examples=["epost@epost.com"]
     )
     telefon: Optional[str] = Field(
-        None, description='Underenhetens telefonnummer', examples=['91504800']
+        None, description="Underenhetens telefonnummer", examples=["91504800"]
     )
     mobil: Optional[str] = Field(
-        None, description='Underenhetens mobilnummer', examples=['91504800']
+        None, description="Underenhetens mobilnummer", examples=["91504800"]
     )
-    field_links: Optional[FieldLinks13] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks13] = Field(None, alias="_links")
 
 
 class Self14(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter"],
     )
 
 
 class FieldLinks14(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     next: Optional[Next] = None
     last: Optional[Last] = None
@@ -1244,19 +1270,19 @@ class FieldLinks14(BaseModel):
 
 class FieldEmbedded1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     underenheter: Optional[Sequence[Underenhet]] = Field(
-        None, description='En liste av underenheter som finnes i Enhetsregisteret'
+        None, description="En liste av underenheter som finnes i Enhetsregisteret"
     )
 
 
 class Underenheter1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: FieldLinks14 = Field(..., alias='_links')
-    field_embedded: Optional[FieldEmbedded1] = Field(None, alias='_embedded')
+    field_links: FieldLinks14 = Field(..., alias="_links")
+    field_embedded: Optional[FieldEmbedded1] = Field(None, alias="_embedded")
     page: Page
 
 
@@ -1266,185 +1292,185 @@ class UnderenheterLastned(RootModel[bytes]):
 
 class Self15(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR'
+            "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
         ],
     )
 
 
 class FieldLinks15(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self15] = None
 
 
 class Organisasjonsform3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks15] = Field(None, alias='_links')
-    kode: str = Field(..., description='Organisasjonsformen', examples=['BEDR'])
+    field_links: Optional[FieldLinks15] = Field(None, alias="_links")
+    kode: str = Field(..., description="Organisasjonsformen", examples=["BEDR"])
     utgaatt: Optional[str] = Field(
         None,
-        description='Dato når organisasjonsformen evt. ble ugyldig',
-        examples=['2024-01-04'],
+        description="Dato når organisasjonsformen evt. ble ugyldig",
+        examples=["2024-01-04"],
     )
     beskrivelse: str = Field(
         ...,
-        description='Tekstlig beskrivelse av organisasjonsformen',
-        examples=['Underenhet til næringsdrivende og offentlig forvaltning'],
+        description="Tekstlig beskrivelse av organisasjonsformen",
+        examples=["Underenhet til næringsdrivende og offentlig forvaltning"],
     )
 
 
 class Self16(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/underenheter/509100675'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/underenheter/509100675"],
     )
 
 
 class FieldLinks16(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self16] = None
 
 
 class SlettetUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    respons_klasse: Optional[Literal['SlettetEnhet']] = None
+    respons_klasse: Optional[Literal["SlettetEnhet"]] = None
     organisasjonsnummer: str = Field(
-        ..., description='Underenhetens organisasjonsnummer', examples=['509100675']
+        ..., description="Underenhetens organisasjonsnummer", examples=["509100675"]
     )
-    navn: str = Field(..., description='Underenhetens navn', examples=['Sesam stasjon'])
+    navn: str = Field(..., description="Underenhetens navn", examples=["Sesam stasjon"])
     organisasjonsform: Organisasjonsform3 = Field(
-        ..., description='Underenhetens organisasjonsform'
+        ..., description="Underenhetens organisasjonsform"
     )
     slettedato: str = Field(
-        ..., description='Dato underenheten ble slettet', examples=['2024-03-09']
+        ..., description="Dato underenheten ble slettet", examples=["2024-03-09"]
     )
-    field_links: Optional[FieldLinks16] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks16] = Field(None, alias="_links")
 
 
 class FieldLinks17(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self16] = None
 
 
 class GoneUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     organisasjonsnummer: str = Field(
-        ..., description='Organisasjonsnummeret til enheten', examples=['509100675']
+        ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
     )
     slettedato: str = Field(
-        ..., description='Dato enheten ble slettet', examples=['2024-03-09']
+        ..., description="Dato enheten ble slettet", examples=["2024-03-09"]
     )
-    field_links: Optional[FieldLinks17] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks17] = Field(None, alias="_links")
 
 
 class Self18(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner/0301'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner/0301"],
     )
 
 
 class FieldLinks18(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self18] = None
 
 
 class Kommune(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks18] = Field(None, alias='_links')
-    nummer: str = Field(..., description='Kommunenummeret', examples=['0301'])
-    navn: str = Field(..., description='Kommunenavnet', examples=['OSLO'])
+    field_links: Optional[FieldLinks18] = Field(None, alias="_links")
+    nummer: str = Field(..., description="Kommunenummeret", examples=["0301"])
+    navn: str = Field(..., description="Kommunenavnet", examples=["OSLO"])
 
 
 class Next2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til neste side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner?page=1&size=20'],
+        description="Lenke til neste side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner?page=1&size=20"],
     )
 
 
 class Last2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til siste side med resultater',
+        description="Lenke til siste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/kommuner?page=54469&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/kommuner?page=54469&size=20"
         ],
     )
 
 
 class Prev2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til forrige side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner?page=0&size=20'],
+        description="Lenke til forrige side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner?page=0&size=20"],
     )
 
 
 class Self19(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner"],
     )
 
 
 class First2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til første side med resultater',
-        examples=['https://data.brreg.no/enhetsregisteret/api/kommuner?page=0&size=20'],
+        description="Lenke til første side med resultater",
+        examples=["https://data.brreg.no/enhetsregisteret/api/kommuner?page=0&size=20"],
     )
 
 
 class FieldLinks19(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     next: Optional[Next2] = None
     last: Optional[Last2] = None
@@ -1455,62 +1481,62 @@ class FieldLinks19(BaseModel):
 
 class FieldEmbedded2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kommuner: Sequence[Kommune] = Field(
-        ..., description='En liste av kommuner som finnes i Enhetsregisteret'
+        ..., description="En liste av kommuner som finnes i Enhetsregisteret"
     )
 
 
 class Kommuner1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks19] = Field(None, alias='_links')
-    field_embedded: Optional[FieldEmbedded2] = Field(None, alias='_embedded')
+    field_links: Optional[FieldLinks19] = Field(None, alias="_links")
+    field_embedded: Optional[FieldEmbedded2] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
 class Enheter2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til enheter ressurs',
+        description="Lenke til enheter ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/enheter'
+            "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/enheter"
         ],
     )
 
 
 class Underenheter2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til underenheter ressurs',
+        description="Lenke til underenheter ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/underenheter'
+            "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/underenheter"
         ],
     )
 
 
 class Self20(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/organisasjonsformer'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/organisasjonsformer"],
     )
 
 
 class FieldLinks20(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     enheter: Optional[Enheter2] = None
     underenheter: Optional[Underenheter2] = None
@@ -1519,227 +1545,230 @@ class FieldLinks20(BaseModel):
 
 class FieldEmbedded3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     organisasjonsformer: Sequence[Organisasjonsform1] = Field(
-        ..., description='En liste av organisasjonsformer som finnes i Enhetsregisteret'
+        ..., description="En liste av organisasjonsformer som finnes i Enhetsregisteret"
     )
 
 
 class Organisasjonsformer1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     field_links: Optional[FieldLinks20] = Field(
-        None, alias='_links', description='Links to resources'
+        None, alias="_links", description="Links to resources"
     )
-    field_embedded: Optional[FieldEmbedded3] = Field(None, alias='_embedded')
+    field_embedded: Optional[FieldEmbedded3] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
 class FieldLinks21(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self20] = None
 
 
 class OrganisasjonsformerEnheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks21] = Field(None, alias='_links')
-    field_embedded: Optional[FieldEmbedded3] = Field(None, alias='_embedded')
+    field_links: Optional[FieldLinks21] = Field(None, alias="_links")
+    field_embedded: Optional[FieldEmbedded3] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
 class FieldLinks22(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self20] = None
 
 
 class OrganisasjonsformerUnderenheter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks22] = Field(None, alias='_links')
-    field_embedded: Optional[FieldEmbedded3] = Field(None, alias='_embedded')
+    field_links: Optional[FieldLinks22] = Field(None, alias="_links")
+    field_embedded: Optional[FieldEmbedded3] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
 class Matrikkelenhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    orgnr: str = Field(..., description='Organisasjonsnummer', examples=[987654321])
-    kommnr: str = Field(..., description='Kommunenummer', examples=[1234])
-    gaardsnr: str = Field(..., description='Gårdsnummer', examples=[77665])
-    bruksnr: str = Field(..., description='Bruksnummer', examples=[55677])
-    festenr: str = Field(..., description='Festenummer', examples=[5434])
+    orgnr: str = Field(..., description="Organisasjonsnummer", examples=[987654321])
+    kommnr: str = Field(..., description="Kommunenummer", examples=[1234])
+    gaardsnr: str = Field(..., description="Gårdsnummer", examples=[77665])
+    bruksnr: str = Field(..., description="Bruksnummer", examples=[55677])
+    festenr: str = Field(..., description="Festenummer", examples=[5434])
     matrikkelenhetid: str = Field(
         ...,
-        description='Informasjonsløs identifikator for en matrikkelenhet',
+        description="Informasjonsløs identifikator for en matrikkelenhet",
         examples=[1010101],
     )
     rekkefolge: str = Field(
-        ..., description='Rekkefølge på organisasjonsnummer', examples=[1]
+        ..., description="Rekkefølge på organisasjonsnummer", examples=[1]
     )
 
 
 class Matrikkelenheter(RootModel[Sequence[Matrikkelenhet]]):
     root: Sequence[Matrikkelenhet] = Field(
-        ..., description='En liste av matrikkelenheter'
+        ..., description="En liste av matrikkelenheter"
     )
 
 
 class Data(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     organisasjonsnummer: Optional[str] = Field(
-        None, description='Unik id-nummer tilhørende hendelsen', examples=['974760673']
+        None, description="Unik id-nummer tilhørende hendelsen", examples=["974760673"]
     )
 
 
 class RolleOppdatering(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     specversion: str = Field(
-        ..., description='Versjon for CloudEvent spesifikasjon', examples=[1]
+        ..., description="Versjon for CloudEvent spesifikasjon", examples=[1]
     )
-    id: str = Field(..., description='ID for hendelsen', examples=[1])
+    id: str = Field(..., description="ID for hendelsen", examples=[1])
     source: str = Field(
         ...,
-        description='Kilden til hendelsen',
+        description="Kilden til hendelsen",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/enheter/974760673/roller'
+            "https://data.brreg.no/enhetsregisteret/api/enheter/974760673/roller"
         ],
     )
     type: str = Field(
         ...,
-        description='Type for hendelsen',
-        examples=['no.brreg.enhetsregisteret.rolle.oppdatert'],
+        description="Type for hendelsen",
+        examples=["no.brreg.enhetsregisteret.rolle.oppdatert"],
     )
     time: str = Field(
-        ..., description='Dato for hendelsen', examples=['2021-00-00T00:00:00.000Z']
+        ..., description="Dato for hendelsen", examples=["2021-00-00T00:00:00.000Z"]
     )
-    data: Data = Field(..., description='Rolle data')
+    data: Data = Field(..., description="Rolle data")
 
 
 class RolleOppdateringer(RootModel[Sequence[RolleOppdatering]]):
     root: Sequence[RolleOppdatering] = Field(
-        ..., description='En liste av rolleoppdateringer'
+        ..., description="En liste av rolleoppdateringer"
     )
 
 
 class Enhet2(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/enheter/913189892'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/enheter/913189892"],
     )
 
 
 class FieldLinks23(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     enhet: Optional[Enhet2] = None
 
 
 class OppdateringerEnhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     oppdateringsid: float = Field(
-        ..., description='Sekvensiell oppdateringsid for enhet.', examples=[1]
+        ..., description="Sekvensiell oppdateringsid for enhet.", examples=[1]
     )
     dato: str = Field(
         ...,
-        description='Tidsstempel for når endringen på enheten ble offentliggjort i dette APIet (ISO-8601)',
-        examples=['2018-04-23T06:03:29.443Z'],
+        description=(
+            "Tidsstempel for når endringen på enheten ble offentliggjort i dette APIet "
+            "(ISO-8601)"
+        ),
+        examples=["2018-04-23T06:03:29.443Z"],
     )
     organisasjonsnummer: str = Field(
-        ..., description='Enhetens organisasjonsnummer.', examples=['913189892']
+        ..., description="Enhetens organisasjonsnummer.", examples=["913189892"]
     )
     endringstype: str = Field(
-        ..., description='Type endring som ble gjennomført', examples=['Ukjent']
+        ..., description="Type endring som ble gjennomført", examples=["Ukjent"]
     )
-    field_links: Optional[FieldLinks23] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks23] = Field(None, alias="_links")
 
 
 class Next3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til neste side med resultater',
+        description="Lenke til neste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=1&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=1&size=20"
         ],
     )
 
 
 class Last3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til siste side med resultater',
+        description="Lenke til siste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=54469&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=54469&size=20"
         ],
     )
 
 
 class Prev3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til forrige side med resultater',
+        description="Lenke til forrige side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=0&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=0&size=20"
         ],
     )
 
 
 class Self23(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter"],
     )
 
 
 class First3(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til første side med resultater',
+        description="Lenke til første side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=0&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/enheter?page=0&size=20"
         ],
     )
 
 
 class FieldLinks24(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     next: Optional[Next3] = None
     last: Optional[Last3] = None
@@ -1750,129 +1779,132 @@ class FieldLinks24(BaseModel):
 
 class FieldEmbedded6(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     oppdaterteEnheter: Sequence[OppdateringerEnhet] = Field(
-        ..., description='En liste av oppdaterte enheter'
+        ..., description="En liste av oppdaterte enheter"
     )
 
 
 class OppdateringerEnheter1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks24] = Field(None, alias='_links')
-    field_embedded: Optional[FieldEmbedded6] = Field(None, alias='_embedded')
+    field_links: Optional[FieldLinks24] = Field(None, alias="_links")
+    field_embedded: Optional[FieldEmbedded6] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
 class Underenhet1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/undereenheter/913189892'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/undereenheter/913189892"],
     )
 
 
 class FieldLinks25(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     underenhet: Optional[Underenhet1] = None
 
 
 class OppdateringerUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     oppdateringsid: float = Field(
-        ..., description='Sekvensiell oppdateringsid for enhet.', examples=[1]
+        ..., description="Sekvensiell oppdateringsid for enhet.", examples=[1]
     )
     dato: str = Field(
         ...,
-        description='Tidsstempel for når endringen på enheten ble offentliggjort i dette APIet (ISO-8601)',
-        examples=['2018-04-23T06:03:29.443Z'],
+        description=(
+            "Tidsstempel for når endringen på enheten ble offentliggjort i dette APIet "
+            "(ISO-8601)"
+        ),
+        examples=["2018-04-23T06:03:29.443Z"],
     )
     organisasjonsnummer: str = Field(
-        ..., description='Enhetens organisasjonsnummer.', examples=['913189892']
+        ..., description="Enhetens organisasjonsnummer.", examples=["913189892"]
     )
     endringstype: str = Field(
-        ..., description='Type endring som ble gjennomført', examples=['Ukjent']
+        ..., description="Type endring som ble gjennomført", examples=["Ukjent"]
     )
-    field_links: Optional[FieldLinks25] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks25] = Field(None, alias="_links")
 
 
 class Next4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til neste side med resultater',
+        description="Lenke til neste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=1&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=1&size=20"
         ],
     )
 
 
 class Last4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til siste side med resultater',
+        description="Lenke til siste side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=54469&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=54469&size=20"
         ],
     )
 
 
 class Prev4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til forrige side med resultater',
+        description="Lenke til forrige side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=0&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=0&size=20"
         ],
     )
 
 
 class Self24(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter"
         ],
     )
 
 
 class First4(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: Optional[str] = Field(
         None,
-        description='Lenke til første side med resultater',
+        description="Lenke til første side med resultater",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=0&size=20'
+            "https://data.brreg.no/enhetsregisteret/api/oppdateringer/underenheter?page=0&size=20"
         ],
     )
 
 
 class FieldLinks26(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     next: Optional[Next4] = None
     last: Optional[Last4] = None
@@ -1883,19 +1915,19 @@ class FieldLinks26(BaseModel):
 
 class FieldEmbedded7(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     oppdaterteUnderenheter: Sequence[OppdateringerUnderenhet] = Field(
-        ..., description='En liste av oppdaterte underenheter'
+        ..., description="En liste av oppdaterte underenheter"
     )
 
 
 class OppdateringerUnderenheter1(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_links: Optional[FieldLinks26] = Field(None, alias='_links')
-    field_embedded: Optional[FieldEmbedded7] = Field(None, alias='_embedded')
+    field_links: Optional[FieldLinks26] = Field(None, alias="_links")
+    field_embedded: Optional[FieldEmbedded7] = Field(None, alias="_embedded")
     page: Optional[Page] = None
 
 
@@ -1905,223 +1937,241 @@ class RollerTotalbestand(RootModel[bytes]):
 
 class Self25(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
+        description="Lenke til egen ressurs",
         examples=[
-            'https://data.brreg.no/enhetsregisteret/api/roller/representanter/A-AK'
+            "https://data.brreg.no/enhetsregisteret/api/roller/representanter/A-AK"
         ],
     )
 
 
 class FieldLinks27(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self25] = None
 
 
 class RolleRepresentant(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    kode: str = Field(..., description='Koden', examples=['A-AK'])
+    kode: str = Field(..., description="Koden", examples=["A-AK"])
     beskrivelse: str = Field(
-        ..., description='Beskrivelsen', examples=['Representant for A-aksjonærene']
+        ..., description="Beskrivelsen", examples=["Representant for A-aksjonærene"]
     )
-    field_links: Optional[FieldLinks27] = Field(None, alias='_links')
+    field_links: Optional[FieldLinks27] = Field(None, alias="_links")
 
 
 class FieldEmbedded8(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     representanter: Sequence[RolleRepresentant] = Field(
-        ..., description='En liste av rolle representanter'
+        ..., description="En liste av rolle representanter"
     )
 
 
 class Self26(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/roller/representanter'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/roller/representanter"],
     )
 
 
 class FieldLinks28(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self26] = None
 
 
 class RolleRepresentanter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_embedded: Optional[FieldEmbedded8] = Field(None, alias='_embedded')
-    field_links: Optional[FieldLinks28] = Field(None, alias='_links')
+    field_embedded: Optional[FieldEmbedded8] = Field(None, alias="_embedded")
+    field_links: Optional[FieldLinks28] = Field(None, alias="_links")
 
 
 class FieldEmbedded9(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     rollegruppetyper: Sequence[RolleRollegruppetype] = Field(
-        ..., description='En liste av rollegruppetyper'
+        ..., description="En liste av rollegruppetyper"
     )
 
 
 class Self27(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper"],
     )
 
 
 class FieldLinks29(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self27] = None
 
 
 class RolleRollegruppetyper(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_embedded: Optional[FieldEmbedded9] = Field(None, alias='_embedded')
-    field_links: Optional[FieldLinks29] = Field(None, alias='_links')
+    field_embedded: Optional[FieldEmbedded9] = Field(None, alias="_embedded")
+    field_links: Optional[FieldLinks29] = Field(None, alias="_links")
 
 
 class FieldEmbedded10(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     rolletyper: Sequence[RolleRolletype] = Field(
-        ..., description='En liste av rolletyper'
+        ..., description="En liste av rolletyper"
     )
 
 
 class Self28(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     href: str = Field(
         ...,
-        description='Lenke til egen ressurs',
-        examples=['https://data.brreg.no/enhetsregisteret/api/roller/rolletyper'],
+        description="Lenke til egen ressurs",
+        examples=["https://data.brreg.no/enhetsregisteret/api/roller/rolletyper"],
     )
 
 
 class FieldLinks30(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     self: Optional[Self28] = None
 
 
 class RolleRolletyper(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    field_embedded: Optional[FieldEmbedded10] = Field(None, alias='_embedded')
-    field_links: Optional[FieldLinks30] = Field(None, alias='_links')
+    field_embedded: Optional[FieldEmbedded10] = Field(None, alias="_embedded")
+    field_links: Optional[FieldLinks30] = Field(None, alias="_links")
 
 
 class Vedtekter(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     frivilligRegistrerteVedtekter: bool = Field(
         ...,
-        description='Om den frivillige organisasjonen har registrert vedtekter (plikter å sende oppdaterte vedtekter når disse endret)',
+        description=(
+            "Om den frivillige organisasjonen har registrert vedtekter (plikter å "
+            "sende oppdaterte vedtekter når disse endret)"
+        ),
         examples=[True],
     )
     sistOppdaterteVedtekter: Optional[date] = Field(
-        None, description='Dato sist vedtekter ble oppdatert', examples=['2001-01-01']
+        None, description="Dato sist vedtekter ble oppdatert", examples=["2001-01-01"]
     )
 
 
 class Relasjon(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     relasjonsrolleFra: Optional[str] = Field(
         None,
-        description='Relasjonen denne frivillige organisasjonen har fra en annen frivillig organisasjon',
-        examples=['virksomhetsrelasjonsrolle.lokalledd'],
+        description=(
+            "Relasjonen denne frivillige organisasjonen har fra en annen frivillig "
+            "organisasjon"
+        ),
+        examples=["virksomhetsrelasjonsrolle.lokalledd"],
     )
     relasjonsrolleTil: Optional[str] = Field(
         None,
-        description='Relasjonen denne frivillige organisasjonen har til en annen frivillig organisasjon',
-        examples=['virksomhetsrelasjonsrolle.sentralledd'],
+        description=(
+            "Relasjonen denne frivillige organisasjonen har til en annen frivillig "
+            "organisasjon"
+        ),
+        examples=["virksomhetsrelasjonsrolle.sentralledd"],
     )
     relasjonTil: Optional[str] = Field(
         None,
-        description='Organisasjonsnummeret til den relaterte frivillige organisasjonen',
-        examples=['123456789'],
+        description="Organisasjonsnummeret til den relaterte frivillige organisasjonen",
+        examples=["123456789"],
     )
 
 
 class ICNPOKategori(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     kategori: str = Field(
         ...,
-        description='Entydig intern identifikator for ICNPO-Kategori, brukes ved oppretting og redigering av frivillig organisasjon i Brønnøysundregistrene',
-        examples=['ICNPOKategori.kunstOgKultur'],
+        description=(
+            "Entydig intern identifikator for ICNPO-Kategori, brukes ved oppretting og "
+            "redigering av frivillig organisasjon i Brønnøysundregistrene"
+        ),
+        examples=["ICNPOKategori.kunstOgKultur"],
     )
     icnpoNummer: str = Field(
         ...,
-        description='Entydig identifikator for ICNPO-Kategori (International Classification of Non-Profit Organization)',
-        examples=['1100'],
+        description=(
+            "Entydig identifikator for ICNPO-Kategori (International Classification of "
+            "Non-Profit Organization)"
+        ),
+        examples=["1100"],
     )
     rekkefoelge: int = Field(
-        ..., description='Rekkefølge for ICNPO-kategori', examples=[1]
+        ..., description="Rekkefølge for ICNPO-kategori", examples=[1]
     )
 
 
 class Regnskapsrapportering(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     harPaatattSegRapporteringsplikt: bool = Field(
         ...,
-        description='Om den frivillige organisasjonen påtar seg å innrapportere årsregnskap til regnskapsregisteret',
+        description=(
+            "Om den frivillige organisasjonen påtar seg å innrapportere årsregnskap "
+            "til regnskapsregisteret"
+        ),
         examples=[True],
     )
     avslutningsdatoForRegnskapsperiode: Optional[str] = Field(
         None,
-        description='Avslutningsdato for regnskapsperioden. Formatet er: dd.mm',
-        examples=['24.12'],
+        description="Avslutningsdato for regnskapsperioden. Formatet er: dd.mm",
+        examples=["24.12"],
     )
 
 
 class Paategning(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     identifikatorInformasjonstype: Optional[str] = Field(
         None,
-        description='Informasjonstypen påtegningen gjelder',
-        examples=['informasjonstype.organisasjonsnummer'],
+        description="Informasjonstypen påtegningen gjelder",
+        examples=["informasjonstype.organisasjonsnummer"],
     )
     paategning: Optional[str] = Field(
         None,
-        description='Påtegningen',
-        examples=['Eksempel på påtegning på frivillig organisasjon AS'],
+        description="Påtegningen",
+        examples=["Eksempel på påtegning på frivillig organisasjon AS"],
     )
 
 

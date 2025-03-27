@@ -10,7 +10,6 @@ from brreg_wrapper.models import (
     Enheter1,
     FieldEmbedded,
     FieldLinks3,
-    Organisasjonsformer1,  # Added for kodeverk test
     Page,
     SlettetEnhet,
 )
@@ -103,7 +102,9 @@ async def test_get_organisasjonsformer_url(httpx_mock: HTTPXMock):
                     "beskrivelse": "Aksjeselskap",
                     "_links": {
                         "self": {
-                            "href": f"{BrregClient.BASE_URL}/kodeverk/organisasjonsformer/AS"
+                            "href": (
+                                f"{BrregClient.BASE_URL}/kodeverk/organisasjonsformer/AS"
+                            )
                         }
                     },
                 }
@@ -143,7 +144,9 @@ async def test_get_naeringskoder_url(httpx_mock: HTTPXMock):
                     "beskrivelse": "Dyrking av korn...",
                     "_links": {
                         "self": {
-                            "href": f"{BrregClient.BASE_URL}/kodeverk/naeringskoder/01.110"
+                            "href": (
+                                f"{BrregClient.BASE_URL}/kodeverk/naeringskoder/01.110"
+                            )
                         }
                     },
                 }
