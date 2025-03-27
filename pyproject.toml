@@ -1,0 +1,98 @@
+[project]
+name = "brreg-wrapper"
+version = "0.1.0"
+description = "A Python wrapper for the Brønnøysund Register Centre (Brreg) API."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Sondre Dyrnes", email = "sondre@villdyr.no" },
+]
+license = "MIT" # Use SPDX identifier
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    # "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "httpx>=0.27,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/sondreal/brreg-wrapper"
+Repository = "https://github.com/sondreal/brreg-wrapper"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "pytest-httpx>=0.29,<1.0", # Add pytest-httpx
+    "ruff>=0.3,<1.0", # Add ruff
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict" # Or "auto" if preferred
+# Explicitly set the default loop scope to 'function' to silence the warning
+# and align with future pytest-asyncio defaults.
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Same as Black.
+line-length = 88
+
+# Assume Python 3.13
+target-version = "py313"
+
+[tool.ruff.lint]
+# Enable Pyflakes `E` and `F` codes by default.
+# Enable flake8-warning `W` codes by default.
+# Enable isort `I` codes by default.
+# See https://docs.astral.sh/ruff/rules/ for all rules.
+select = ["E", "F", "W", "I"]
+ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is used.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
