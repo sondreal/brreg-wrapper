@@ -41,7 +41,7 @@ from brreg_wrapper import BrregClient
 async def main():
     # The client automatically handles HTTP sessions
     async with BrregClient() as client:
-        org_nr = "982038576" # Example: Google Norway AS
+        org_nr = "923609016" # Example: Equinor ASA
 
         print(f"🔍 Fetching details for organization number: {org_nr}")
         try:
