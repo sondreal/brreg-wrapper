@@ -46,17 +46,29 @@ async def main():
 
         print(f"🔍 Fetching details for organization number: {org_nr}")
         try:
-            entity_info = await client.get_enhet(org_nr)
-            print("\n--- Entity Details ---")
-            # Pretty print the JSON response
-            print(json.dumps(entity_info, indent=2, ensure_ascii=False))
+            # get_enhet returns a Pydantic model (Enhet or SlettetEnhet)
+            entity_model = await client.get_enhet(org_nr)
+            print("\n--- Entity Details (as Pydantic Model) ---")
+            print(entity_model) # You can work with the model object directly
 
-            # Want to find sub-entities?
-            # sub_entity_info = await client.get_underenhet("some_sub_org_nr")
-            # print(json.dumps(sub_entity_info, indent=2, ensure_ascii=False))
+            # To serialize to JSON, convert the model to a JSON-compatible dictionary first
+            # using mode='json'. This handles types like dates correctly.
+            print("\n--- Entity Details (as JSON) ---")
+            entity_dict = entity_model.model_dump(mode='json', by_alias=True, exclude_none=True)
+            print(json.dumps(entity_dict, indent=2, ensure_ascii=False))
+
+            # Similarly for sub-entities (get_underenhet returns Underenhet or SlettetUnderenhet)
+            # sub_entity_model = await client.get_underenhet("some_sub_org_nr")
+            # sub_entity_dict = sub_entity_model.model_dump(mode='json', by_alias=True, exclude_none=True)
+            # print(json.dumps(sub_entity_dict, indent=2, ensure_ascii=False))
 
         except Exception as e:
             print(f"\n💥 Oops! An error occurred: {e}")
+
+    # Note: Methods like get_enhet and get_underenhet return Pydantic models.
+    # Use the .model_dump(mode='json', ...) method on the returned object to get a
+    # dictionary with JSON-compatible types (like dates converted to strings)
+    # if you need to serialize the data.
 
         print("\n✅ Done!")
 

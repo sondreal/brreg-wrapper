@@ -10,6 +10,7 @@ from brreg_wrapper.models import (
     Enheter1,
     FieldEmbedded,
     FieldLinks3,
+    Kommuner1,  # Added import
     Page,
     SlettetEnhet,
 )
@@ -211,6 +212,56 @@ async def test_get_sektorkoder_url(httpx_mock: HTTPXMock):
         assert request is not None
         assert request.method == "GET"
         assert str(request.url) == expected_url
+
+
+@pytest.mark.asyncio
+async def test_get_kommuner_success(httpx_mock: HTTPXMock):
+    """Test successfully retrieving municipalities."""
+    expected_url = f"{BrregClient.BASE_URL}/kodeverk/kommuner"
+    # Mock response data - API returns a list, client wraps it
+    mock_api_response_list = [
+        {
+            "nummer": "0301",
+            "navn": "OSLO",
+            "_links": {
+                "self": {"href": f"{BrregClient.BASE_URL}/kodeverk/kommuner/0301"}
+            },
+        },
+        {
+            "nummer": "1101",
+            "navn": "EIGERØY",  # Example, might not be real
+            "_links": {
+                "self": {"href": f"{BrregClient.BASE_URL}/kodeverk/kommuner/1101"}
+            },
+        },
+    ]
+    # The client wraps this list into the structure expected by Kommuner1 model
+
+    httpx_mock.add_response(
+        url=expected_url,
+        method="GET",
+        json=mock_api_response_list,  # Mock the raw API list response
+        status_code=200,
+        headers={"Content-Type": "application/json"},
+    )
+
+    async with BrregClient() as client:
+        kommuner_data = await client.get_kommuner()
+
+        # Assert the type and specific attributes
+        assert isinstance(kommuner_data, Kommuner1)
+        assert kommuner_data.field_embedded is not None
+        assert len(kommuner_data.field_embedded.kommuner) == 2
+        assert kommuner_data.field_embedded.kommuner[0].nummer == "0301"
+        assert kommuner_data.field_embedded.kommuner[0].navn == "OSLO"
+        assert kommuner_data.field_embedded.kommuner[1].nummer == "1101"
+
+        # Verify the request was made as expected
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert request.method == "GET"
+        assert str(request.url) == expected_url
+        assert request.headers["Accept"] == "application/json"
 
 
 @pytest.mark.asyncio

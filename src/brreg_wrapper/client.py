@@ -3,6 +3,7 @@ import httpx
 from .models import (
     Enhet,
     Enheter1,
+    Kommuner1,  # Added import
     OppdateringerEnheter1,
     OppdateringerUnderenheter1,
     Organisasjonsformer1,
@@ -101,6 +102,8 @@ class BrregClient:
 
         Returns:
             An Enhet or SlettetEnhet object containing the entity's information.
+            Note: Use `.model_dump(mode="json")` for JSON serialization to handle
+                  types like dates correctly.
         """
         endpoint = f"/enheter/{organisasjonsnummer}"
         response = await self._request("GET", endpoint)
@@ -128,6 +131,8 @@ class BrregClient:
 
         Returns:
             An Enheter1 object containing the search results.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
         endpoint = "/enheter"
         params = {
@@ -151,6 +156,8 @@ class BrregClient:
         Returns:
             A Underenhet or SlettetUnderenhet object containing the
             sub-entity's information.
+            Note: Use `.model_dump(mode="json")` for JSON serialization to handle
+                  types like dates correctly.
         """
         endpoint = f"/underenheter/{organisasjonsnummer}"
         response = await self._request("GET", endpoint)
@@ -176,6 +183,8 @@ class BrregClient:
 
         Returns:
             A Underenheter1 object containing the search results.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
         endpoint = "/underenheter"
         params = {
@@ -191,6 +200,10 @@ class BrregClient:
 
         Returns:
             A RolleRollegruppetyper object containing the list of role group types.
+            Note: This method fetches all defined role group types, not roles for a
+                  specific entity. Use `get_enhet_roller` or `get_underenhet_roller`
+                  for entity-specific roles.
+                  Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
         endpoint = "/roller/rollegrupper"
         response = await self._request("GET", endpoint)
@@ -203,6 +216,8 @@ class BrregClient:
 
         Returns:
             A RolleRolletyper object containing the list of role types.
+            Note: This method fetches all defined role types.
+                  Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
         endpoint = "/roller/roller"
         response = await self._request("GET", endpoint)
@@ -218,6 +233,7 @@ class BrregClient:
 
         Returns:
             A Roller object containing the roles for the entity.
+            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
         endpoint = f"/enheter/{organisasjonsnummer}/roller"
         response = await self._request("GET", endpoint)
@@ -233,6 +249,7 @@ class BrregClient:
 
         Returns:
             A Roller object containing the roles for the sub-entity.
+            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
         endpoint = f"/underenheter/{organisasjonsnummer}/roller"
         response = await self._request("GET", endpoint)
@@ -247,7 +264,9 @@ class BrregClient:
             organisasjonsnummer: The 9-digit organization number of the entity.
 
         Returns:
-            A dictionary containing the basic data for the entity.
+            A dictionary containing the basic data for the entity, parsed directly
+            from the API's JSON response. This dictionary should generally be
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = f"/grunndata/enheter/{organisasjonsnummer}"
         response = await self._request("GET", endpoint)
@@ -262,11 +281,35 @@ class BrregClient:
             organisasjonsnummer: The 9-digit organization number of the sub-entity.
 
         Returns:
-            A dictionary containing the basic data for the sub-entity.
+            A dictionary containing the basic data for the sub-entity, parsed directly
+            from the API's JSON response. This dictionary should generally be
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = f"/grunndata/underenheter/{organisasjonsnummer}"
         response = await self._request("GET", endpoint)
         return response.json()
+
+    async def get_kommuner(self) -> Kommuner1:
+        """
+        Retrieves all municipalities (kommuner).
+        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-kommuner
+
+        Returns:
+            A Kommuner1 object containing the list of municipalities.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
+        """
+        endpoint = "/kodeverk/kommuner"
+        response = await self._request("GET", endpoint)
+        # The API returns the list directly, not nested under a key.
+        data = response.json()
+        if isinstance(data, list):
+            # Wrap the list response to match the Kommuner1 model structure
+            wrapped_data = {"_embedded": {"kommuner": data}}
+            return Kommuner1.model_validate(wrapped_data)
+        else:
+            # If the response is already structured, validate directly
+            return Kommuner1.model_validate(data)
 
     async def get_organisasjonsformer(self) -> Organisasjonsformer1:
         """
@@ -275,6 +318,8 @@ class BrregClient:
 
         Returns:
             An Organisasjonsformer1 object containing the list of organization forms.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
         endpoint = "/kodeverk/organisasjonsformer"
         response = await self._request("GET", endpoint)
@@ -288,7 +333,9 @@ class BrregClient:
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-naeringskoder
 
         Returns:
-            A dictionary containing the list of industry codes.
+            A dictionary containing the list of industry codes, parsed directly
+            from the API's JSON response. This dictionary should generally be
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = "/kodeverk/naeringskoder"
         response = await self._request("GET", endpoint)
@@ -302,7 +349,9 @@ class BrregClient:
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-sektorkoder
 
         Returns:
-            A dictionary containing the list of sector codes.
+            A dictionary containing the list of sector codes, parsed directly
+            from the API's JSON response. This dictionary should generally be
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = "/kodeverk/sektorkoder"
         response = await self._request("GET", endpoint)
@@ -319,6 +368,8 @@ class BrregClient:
 
         Returns:
             An OppdateringerEnheter1 object containing the entity updates.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
         endpoint = "/oppdateringer/enheter"
         params = {
@@ -340,6 +391,8 @@ class BrregClient:
 
         Returns:
             An OppdateringerUnderenheter1 object containing the sub-entity updates.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
         endpoint = "/oppdateringer/underenheter"
         params = {
@@ -357,7 +410,9 @@ class BrregClient:
             organisasjonsnummer: The 9-digit organization number of the entity.
 
         Returns:
-            A dictionary containing the historical data for the entity.
+            A dictionary containing the historical data for the entity, parsed directly
+            from the API's JSON response. This dictionary should generally be
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = f"/enheter/{organisasjonsnummer}/historikk"
         response = await self._request("GET", endpoint)
@@ -372,7 +427,9 @@ class BrregClient:
             organisasjonsnummer: The 9-digit organization number of the sub-entity.
 
         Returns:
-            A dictionary containing the historical data for the sub-entity.
+            A dictionary containing the historical data for the sub-entity,
+            parsed directly from the API's JSON response. Generally
+            JSON-serializable using standard `json.dumps`.
         """
         endpoint = f"/underenheter/{organisasjonsnummer}/historikk"
         response = await self._request("GET", endpoint)
