@@ -1,0 +1,11 @@
+# Auto detect text files and ensure they use LF line endings
+* text=auto eol=lf
+
+# Explicitly declare files that will always have LF line endings
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+.gitignore text eol=lf
+LICENSE text eol=lf
