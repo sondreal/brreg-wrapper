@@ -1,14 +1,23 @@
+from typing import Any, Dict
+
 import httpx
 
 from .models import (
     Enhet,
     Enheter1,
-    Kommuner1,  # Added import
+    Kommune,
+    Kommuner1,
+    Matrikkelenheter,
     OppdateringerEnheter1,
     OppdateringerUnderenheter1,
+    Organisasjonsform,
     Organisasjonsformer1,
+    OrganisasjonsformerEnheter,
+    OrganisasjonsformerUnderenheter,
+    RolleOppdateringer,
     Roller,
-    RolleRollegruppetyper,  # Re-added import
+    RolleRepresentanter,
+    RolleRollegruppetyper,
     RolleRolletyper,
     SlettetEnhet,
     SlettetUnderenhet,
@@ -79,6 +88,47 @@ class BrregClient:
             print(error_message)
             raise  # Re-raise or handle specific errors as needed
 
+    async def _download_request(
+        self,
+        method: str,
+        endpoint: str,
+        accept_header: str,
+        params: dict | None = None,
+    ) -> httpx.Response:
+        """
+        Makes an asynchronous HTTP request intended for downloading files.
+
+        Args:
+            method: The HTTP method (usually "GET").
+            endpoint: The API endpoint path.
+            accept_header: The value for the 'Accept' header (e.g., 'text/csv').
+            params: Optional query parameters.
+
+        Returns:
+            The raw httpx.Response object, allowing access to content, headers, etc.
+
+        Raises:
+            httpx.HTTPStatusError: If the API returns an error status code.
+        """
+        headers = {"Accept": accept_header}
+        try:
+            # Use stream=True if you anticipate large files and want to handle streaming
+            response = await self._client.request(
+                method, endpoint, params=params, headers=headers
+            )
+            response.raise_for_status()
+            return response
+        except httpx.RequestError as exc:
+            print(f"An error occurred while requesting {exc.request.url!r}: {exc}")
+            raise
+        except httpx.HTTPStatusError as exc:
+            error_message = (
+                f"Error response {exc.response.status_code} "
+                f"while requesting {exc.request.url!r}: {exc.response.text}"
+            )
+            print(error_message)
+            raise
+
     async def __aenter__(self):
         """Enter the async context manager."""
         return self
@@ -90,6 +140,26 @@ class BrregClient:
     async def close(self):
         """Closes the underlying httpx client."""
         await self._client.aclose()
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Generelt Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    async def get_services(self) -> Dict[str, Any]:
+        """
+        Retrieves the list of available services/endpoints from the root API endpoint.
+        Ref: Provided Swagger (GET /enhetsregisteret/api)
+
+        Returns:
+            A dictionary representing the available services, likely containing links.
+        """
+        endpoint = "/"
+        response = await self._request("GET", endpoint)
+        return response.json()
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Enhet Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_enhet(self, organisasjonsnummer: str) -> Enhet | SlettetEnhet:
         """
@@ -140,6 +210,73 @@ class BrregClient:
         }  # Filter out None values
         response = await self._request("GET", endpoint, params=params)
         return Enheter1.model_validate(response.json())
+
+    async def download_enheter_json(self, **kwargs) -> httpx.Response:
+        """
+        Downloads entities (enheter) as a JSON file.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned)
+
+        Args:
+            **kwargs: Optional filter parameters similar to search_enheter.
+
+        Returns:
+            An httpx.Response object containing the JSON file content.
+            Use response.content or response.text to access the data.
+        """
+        endpoint = "/enheter/lastned"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        # Assuming standard JSON MIME type
+        accept_header = "application/json"
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    async def download_enheter_csv(self, **kwargs) -> httpx.Response:
+        """
+        Downloads entities (enheter) as a CSV file.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned/csv)
+
+        Args:
+            **kwargs: Optional filter parameters. Check API docs for specifics.
+                      Often includes parameters like 'levertEtter'.
+
+        Returns:
+            An httpx.Response object containing the CSV file content.
+            Use response.content or response.text to access the data.
+        """
+        endpoint = "/enheter/lastned/csv"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        accept_header = "text/csv"  # Standard CSV MIME type
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    async def download_enheter_spreadsheet(self, **kwargs) -> httpx.Response:
+        """
+        Downloads entities (enheter) as a spreadsheet file (likely Excel).
+        Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned/regneark)
+
+        Args:
+            **kwargs: Optional filter parameters. Check API docs for specifics.
+
+        Returns:
+            An httpx.Response object containing the spreadsheet file content.
+            Use response.content to access the binary data.
+        """
+        endpoint = "/enheter/lastned/regneark"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        # Common MIME type for Excel files
+        accept_header = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        # Alternative might be 'application/vnd.ms-excel' for older formats
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Underenhet Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_underenhet(
         self, organisasjonsnummer: str
@@ -192,6 +329,69 @@ class BrregClient:
         }  # Filter out None values
         response = await self._request("GET", endpoint, params=params)
         return Underenheter1.model_validate(response.json())
+
+    async def download_underenheter_json(self, **kwargs) -> httpx.Response:
+        """
+        Downloads sub-entities (underenheter) as a JSON file.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned)
+
+        Args:
+            **kwargs: Optional filter parameters similar to search_underenheter.
+
+        Returns:
+            An httpx.Response object containing the JSON file content.
+            Use response.content or response.text to access the data.
+        """
+        endpoint = "/underenheter/lastned"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        accept_header = "application/json"
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    async def download_underenheter_csv(self, **kwargs) -> httpx.Response:
+        """
+        Downloads sub-entities (underenheter) as a CSV file.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned/csv)
+
+        Args:
+            **kwargs: Optional filter parameters. Check API docs for specifics.
+
+        Returns:
+            An httpx.Response object containing the CSV file content.
+            Use response.content or response.text to access the data.
+        """
+        endpoint = "/underenheter/lastned/csv"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        accept_header = "text/csv"
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    async def download_underenheter_spreadsheet(self, **kwargs) -> httpx.Response:
+        """
+        Downloads sub-entities (underenheter) as a spreadsheet file (likely Excel).
+        Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned/regneark)
+
+        Args:
+            **kwargs: Optional filter parameters. Check API docs for specifics.
+
+        Returns:
+            An httpx.Response object containing the spreadsheet file content.
+            Use response.content to access the binary data.
+        """
+        endpoint = "/underenheter/lastned/regneark"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        accept_header = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        return await self._download_request(
+            "GET", endpoint, accept_header, params=params
+        )
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Roller Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_rollegrupper(self) -> RolleRollegruppetyper:
         """
@@ -264,55 +464,38 @@ class BrregClient:
         response = await self._request("GET", endpoint)
         return Roller.model_validate(response.json())
 
-    async def get_underenhet_roller(self, organisasjonsnummer: str) -> Roller:
+    async def download_roller_totalbestand(self) -> httpx.Response:
         """
-        Retrieves roles associated with a specific sub-entity (underenhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller-for-underenhet
-
-        Args:
-            organisasjonsnummer: The 9-digit organization number of the sub-entity.
+        Downloads the total inventory of roles as a zipped JSON file.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/roller/totalbestand)
 
         Returns:
-            A Roller object containing the roles for the sub-entity.
-            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
+            An httpx.Response object containing the zipped JSON file content.
+            Use response.content to access the binary data.
         """
-        endpoint = f"/underenheter/{organisasjonsnummer}/roller"
-        response = await self._request("GET", endpoint)
-        return Roller.model_validate(response.json())
+        endpoint = "/roller/totalbestand"
+        # MIME type for zip files
+        accept_header = "application/zip"
+        return await self._download_request("GET", endpoint, accept_header)
 
-    async def get_grunndata_enhet(self, organisasjonsnummer: str) -> dict:
+    async def get_rolle_representanter(self) -> RolleRepresentanter:
         """
-        Retrieves basic data (grunndata) for a specific entity (enhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-grunndata-enhet
-
-        Args:
-            organisasjonsnummer: The 9-digit organization number of the entity.
+        Retrieves all role representatives.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/roller/representanter)
 
         Returns:
-            A dictionary containing the basic data for the entity, parsed directly
-            from the API's JSON response. This dictionary should generally be
-            JSON-serializable using standard `json.dumps`.
+            A RolleRepresentanter object containing the list of role representatives.
+            Note: Use `.model_dump(mode="json")` on the contained models for
+                  JSON serialization if needed.
         """
-        endpoint = f"/grunndata/enheter/{organisasjonsnummer}"
+        endpoint = "/roller/representanter"
         response = await self._request("GET", endpoint)
-        return response.json()
+        # Model expects data directly (likely with _embedded)
+        return RolleRepresentanter.model_validate(response.json())
 
-    async def get_grunndata_underenhet(self, organisasjonsnummer: str) -> dict:
-        """
-        Retrieves basic data (grunndata) for a specific sub-entity (underenhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-grunndata-underenhet
-
-        Args:
-            organisasjonsnummer: The 9-digit organization number of the sub-entity.
-
-        Returns:
-            A dictionary containing the basic data for the sub-entity, parsed directly
-            from the API's JSON response. This dictionary should generally be
-            JSON-serializable using standard `json.dumps`.
-        """
-        endpoint = f"/grunndata/underenheter/{organisasjonsnummer}"
-        response = await self._request("GET", endpoint)
-        return response.json()
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Kommuner Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_kommuner(self) -> Kommuner1:
         """
@@ -335,6 +518,27 @@ class BrregClient:
         else:
             # If the response is already structured, validate directly
             return Kommuner1.model_validate(data)
+
+    async def get_kommune(self, kommunenummer: str) -> Kommune:
+        """
+        Retrieves information about a specific municipality (kommune) by its number.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/kommuner/{kommunenr})
+
+        Args:
+            kommunenummer: The municipality number.
+
+        Returns:
+            A Kommune object containing the municipality's information.
+            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
+        """
+        endpoint = f"/kommuner/{kommunenummer}"
+        response = await self._request("GET", endpoint)
+        # The Kommune model expects the data directly
+        return Kommune.model_validate(response.json())
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Organisasjonsformer Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_organisasjonsformer(self) -> Organisasjonsformer1:
         """
@@ -366,37 +570,84 @@ class BrregClient:
             # If the response is already structured as the model expects
             return Organisasjonsformer1.model_validate(data)
 
-    async def get_naeringskoder(
-        self,
-    ) -> dict:
+    async def get_organisasjonsformer_enheter(self) -> OrganisasjonsformerEnheter:
         """
-        Retrieves all industry codes (Næringskoder - NACE).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-naeringskoder
+        Retrieves organization forms applicable to main entities (enheter).
+        Ref: Provided Swagger (GET /enhetsregisteret/api/organisasjonsformer/enheter)
 
         Returns:
-            A dictionary containing the list of industry codes, parsed directly
-            from the API's JSON response. This dictionary should generally be
-            JSON-serializable using standard `json.dumps`.
+            An OrganisasjonsformerEnheter object containing the list of organization
+            forms for entities.
+            Note: Use `.model_dump(mode="json")` on contained models for JSON
+                  serialization if needed.
         """
-        endpoint = "/naeringskoder"  # Corrected endpoint based on pattern
+        endpoint = "/organisasjonsformer/enheter"
         response = await self._request("GET", endpoint)
-        return response.json()
+        # Model expects data directly (likely with _embedded)
+        return OrganisasjonsformerEnheter.model_validate(response.json())
 
-    async def get_sektorkoder(
+    async def get_organisasjonsformer_underenheter(
         self,
-    ) -> dict:
+    ) -> OrganisasjonsformerUnderenheter:
         """
-        Retrieves all sector codes.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-sektorkoder
+        Retrieves organization forms applicable to sub-entities (underenheter).
+        Ref: GET /enhetsregisteret/api/organisasjonsformer/underenheter (Swagger)
 
         Returns:
-            A dictionary containing the list of sector codes, parsed directly
-            from the API's JSON response. This dictionary should generally be
-            JSON-serializable using standard `json.dumps`.
+            An OrganisasjonsformerUnderenheter object containing the list of
+            organization forms for sub-entities.
+            Note: Use `.model_dump(mode="json")` on contained models for JSON
+                  serialization if needed.
         """
-        endpoint = "/sektorkoder"  # Corrected endpoint based on pattern
+        endpoint = "/organisasjonsformer/underenheter"
         response = await self._request("GET", endpoint)
-        return response.json()
+        # Model expects data directly (likely with _embedded)
+        return OrganisasjonsformerUnderenheter.model_validate(response.json())
+
+    async def get_organisasjonsform(self, organisasjonskode: str) -> Organisasjonsform:
+        """
+        Retrieves the description of a specific organization form by its code.
+        Ref: GET /enhetsregisteret/api/organisasjonsformer/{organisasjonskode} (Swagger)
+
+        Args:
+            organisasjonskode: The code of the organization form.
+
+        Returns:
+            An Organisasjonsform object containing the organization form's description.
+            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
+        """
+        endpoint = f"/organisasjonsformer/{organisasjonskode}"
+        response = await self._request("GET", endpoint)
+        # The Organisasjonsform model expects the data directly
+        return Organisasjonsform.model_validate(response.json())
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Matrikkelenhet Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    async def get_matrikkelenheter(self, **kwargs) -> Matrikkelenheter:
+        """
+        Retrieves cadastral units (matrikkelenheter).
+        Ref: Provided Swagger (GET /enhetsregisteret/api/matrikkelenhet)
+
+        Args:
+            **kwargs: Optional query parameters (check API docs for specifics).
+
+        Returns:
+            A Matrikkelenheter object (RootModel wrapping a list) containing the
+            cadastral units.
+            Note: Use `.model_dump(mode="json")` on contained models for JSON
+                  serialization if needed.
+        """
+        endpoint = "/matrikkelenhet"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        response = await self._request("GET", endpoint, params=params)
+        # Matrikkelenheter is a RootModel expecting a list directly
+        return Matrikkelenheter.model_validate(response.json())
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Oppdateringer Endpoints
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     async def get_enhet_oppdateringer(self, **kwargs) -> OppdateringerEnheter1:
         """
@@ -442,36 +693,23 @@ class BrregClient:
         response = await self._request("GET", endpoint, params=params)
         return OppdateringerUnderenheter1.model_validate(response.json())
 
-    async def get_enhet_historikk(self, organisasjonsnummer: str) -> dict:
+    async def get_rolle_oppdateringer(self, **kwargs) -> RolleOppdateringer:
         """
-        Retrieves historical data for a specific entity (enhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-historikk-enhet
+        Retrieves updates for roles.
+        Ref: Provided Swagger (GET /enhetsregisteret/api/oppdateringer/roller)
 
         Args:
-            organisasjonsnummer: The 9-digit organization number of the entity.
+            **kwargs: Optional query parameters like oppdateringsid, dato, etc.
+                      (Check API docs for specifics).
 
         Returns:
-            A dictionary containing the historical data for the entity, parsed directly
-            from the API's JSON response. This dictionary should generally be
-            JSON-serializable using standard `json.dumps`.
+            A RolleOppdateringer object (RootModel wrapping a list) containing the
+            role updates.
+            Note: Use `.model_dump(mode="json")` on contained models for JSON
+                  serialization if needed.
         """
-        endpoint = f"/enheter/{organisasjonsnummer}/historikk"
-        response = await self._request("GET", endpoint)
-        return response.json()
-
-    async def get_underenhet_historikk(self, organisasjonsnummer: str) -> dict:
-        """
-        Retrieves historical data for a specific sub-entity (underenhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-historikk-underenhet
-
-        Args:
-            organisasjonsnummer: The 9-digit organization number of the sub-entity.
-
-        Returns:
-            A dictionary containing the historical data for the sub-entity,
-            parsed directly from the API's JSON response. Generally
-            JSON-serializable using standard `json.dumps`.
-        """
-        endpoint = f"/underenheter/{organisasjonsnummer}/historikk"
-        response = await self._request("GET", endpoint)
-        return response.json()
+        endpoint = "/oppdateringer/roller"
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        response = await self._request("GET", endpoint, params=params)
+        # RolleOppdateringer is a RootModel expecting a list directly
+        return RolleOppdateringer.model_validate(response.json())
