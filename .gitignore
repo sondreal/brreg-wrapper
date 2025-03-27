@@ -15,3 +15,6 @@ wheels/
 
 # Test artifacts
 .pytest_cache/
+
+# Downloaded schema
+openapi.json

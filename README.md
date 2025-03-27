@@ -11,13 +11,14 @@ Tired of wrestling with raw API calls to the Brønnøysund Register Centre (Brre
 
 Get details on main entities (`enheter`) and sub-entities (`underenheter`), perform searches, and integrate Norwegian business data into your applications effortlessly.
 
-## ✨ Features
+## ✨ Core Features
 
 - **Asynchronous:** Built with `asyncio` and `httpx` for modern, non-blocking I/O.
-- **Simple Interface:** Clean methods like `get_enhet`, `get_underenhet`, `search_enheter`, `search_underenheter`.
 - **Type Hinted:** Fully type-hinted for better developer experience and static analysis.
-- **Minimal Dependencies:** Relies only on the excellent `httpx` library.
-- **PyPI Ready:** Easy to install and integrate.
+- **Pydantic Models:** Uses Pydantic models for robust data validation and easy object access (where applicable).
+- **Context Management:** Supports `async with` for automatic HTTP client cleanup.
+- **Comprehensive API Coverage:** Wraps numerous endpoints from the official Brreg API.
+- **Minimal Dependencies:** Relies primarily on `httpx` and `pydantic`.
 
 ## 🚀 Installation
 
