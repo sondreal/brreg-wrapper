@@ -205,9 +205,19 @@ class BrregClient:
                   for entity-specific roles.
                   Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = "/roller/rollegrupper"
+        endpoint = "/kodeverk/rollegruppetyper"  # Corrected endpoint
         response = await self._request("GET", endpoint)
-        return RolleRollegruppetyper.model_validate(response.json())
+        # The API returns the list directly, not nested under a key.
+        data = response.json()
+        if isinstance(data, list):
+            # Wrap the list response to match the RolleRollegruppetyper model structure
+            # which expects {"_embedded": {"rollegruppetyper": [...]}}
+            wrapped_data = {"_embedded": {"rollegruppetyper": data}}
+            return RolleRollegruppetyper.model_validate(wrapped_data)
+        else:
+            # If the response is already structured (unexpected for this endpoint),
+            # validate directly, though this path is unlikely for /kodeverk endpoints.
+            return RolleRollegruppetyper.model_validate(data)
 
     async def get_roller(self) -> RolleRolletyper:
         """
@@ -219,9 +229,19 @@ class BrregClient:
             Note: This method fetches all defined role types.
                   Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = "/roller/roller"
+        endpoint = "/kodeverk/rolletyper"  # Corrected endpoint
         response = await self._request("GET", endpoint)
-        return RolleRolletyper.model_validate(response.json())
+        # The API returns the list directly, not nested under a key.
+        data = response.json()
+        if isinstance(data, list):
+            # Wrap the list response to match the RolleRolletyper model structure
+            # which expects {"_embedded": {"rolletyper": [...]}}
+            wrapped_data = {"_embedded": {"rolletyper": data}}
+            return RolleRolletyper.model_validate(wrapped_data)
+        else:
+            # If the response is already structured (unexpected for this endpoint),
+            # validate directly, though this path is unlikely for /kodeverk endpoints.
+            return RolleRolletyper.model_validate(data)
 
     async def get_enhet_roller(self, organisasjonsnummer: str) -> Roller:
         """
