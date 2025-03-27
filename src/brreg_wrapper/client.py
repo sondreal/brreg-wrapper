@@ -8,7 +8,7 @@ from .models import (
     OppdateringerUnderenheter1,
     Organisasjonsformer1,
     Roller,
-    RolleRollegruppetyper,
+    RolleRollegruppetyper,  # Re-added import
     RolleRolletyper,
     SlettetEnhet,
     SlettetUnderenhet,
@@ -197,6 +197,7 @@ class BrregClient:
         """
         Retrieves all role groups types.
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-rollegrupper
+             (Old link, endpoint confirmed from user)
 
         Returns:
             A RolleRollegruppetyper object containing the list of role group types.
@@ -205,7 +206,9 @@ class BrregClient:
                   for entity-specific roles.
                   Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = "/kodeverk/rollegruppetyper"  # Corrected endpoint
+        endpoint = (
+            "/roller/rollegruppetyper"  # Corrected endpoint based on user provided docs
+        )
         response = await self._request("GET", endpoint)
         # The API returns the list directly, not nested under a key.
         data = response.json()
@@ -229,7 +232,9 @@ class BrregClient:
             Note: This method fetches all defined role types.
                   Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = "/kodeverk/rolletyper"  # Corrected endpoint
+        endpoint = (
+            "/roller/rolletyper"  # Corrected endpoint based on user provided docs
+        )
         response = await self._request("GET", endpoint)
         # The API returns the list directly, not nested under a key.
         data = response.json()
@@ -319,7 +324,7 @@ class BrregClient:
             Note: Use `.model_dump(mode="json")` on the contained models for
                   JSON serialization if needed.
         """
-        endpoint = "/kodeverk/kommuner"
+        endpoint = "/kommuner"  # Corrected endpoint based on user provided docs
         response = await self._request("GET", endpoint)
         # The API returns the list directly, not nested under a key.
         data = response.json()
@@ -341,9 +346,25 @@ class BrregClient:
             Note: Use `.model_dump(mode="json")` on the contained models for
                   JSON serialization if needed.
         """
-        endpoint = "/kodeverk/organisasjonsformer"
+        endpoint = (
+            "/organisasjonsformer"  # Corrected endpoint based on user provided docs
+        )
         response = await self._request("GET", endpoint)
-        return Organisasjonsformer1.model_validate(response.json())
+        # Assuming the response structure might be a direct list like kommuner or nested
+        data = response.json()
+        # Check if the response is a list and wrap if necessary, similar to kommuner
+        # This assumes the model Organisasjonsformer1 expects a structure like
+        # {"_embedded": {"organisasjonsformer": [...]}} if the API returns a list.
+        # If the API returns the nested structure directly, this check isn't needed.
+        # Adjust based on actual API behavior or model definition if validation fails.
+        if isinstance(data, list):
+            # Wrap the list response if the model expects it
+            # Adjust the key "organisasjonsformer" if the model expects something else
+            wrapped_data = {"_embedded": {"organisasjonsformer": data}}
+            return Organisasjonsformer1.model_validate(wrapped_data)
+        else:
+            # If the response is already structured as the model expects
+            return Organisasjonsformer1.model_validate(data)
 
     async def get_naeringskoder(
         self,
@@ -357,7 +378,7 @@ class BrregClient:
             from the API's JSON response. This dictionary should generally be
             JSON-serializable using standard `json.dumps`.
         """
-        endpoint = "/kodeverk/naeringskoder"
+        endpoint = "/naeringskoder"  # Corrected endpoint based on pattern
         response = await self._request("GET", endpoint)
         return response.json()
 
@@ -373,7 +394,7 @@ class BrregClient:
             from the API's JSON response. This dictionary should generally be
             JSON-serializable using standard `json.dumps`.
         """
-        endpoint = "/kodeverk/sektorkoder"
+        endpoint = "/sektorkoder"  # Corrected endpoint based on pattern
         response = await self._request("GET", endpoint)
         return response.json()
 
