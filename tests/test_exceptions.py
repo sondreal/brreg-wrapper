@@ -2,8 +2,6 @@
 Tests for the exceptions module.
 """
 
-import json
-
 import pytest
 
 from brreg_wrapper.exceptions import (

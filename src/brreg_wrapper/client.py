@@ -1,29 +1,29 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
-import time
-import logging
 import asyncio
+import logging
+import time
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from .exceptions import (
     BrregAPIError,
+    BrregAuthenticationError,
     BrregClientError,
     BrregConnectionError,
+    BrregForbiddenError,
     BrregRateLimitError,
     BrregResourceNotFoundError,
     BrregServerError,
+    BrregServiceUnavailableError,
     BrregTimeoutError,
     BrregValidationError,
-    BrregAuthenticationError,
-    BrregForbiddenError,
-    BrregServiceUnavailableError,
 )
 from .models import (
     Enhet,
@@ -52,7 +52,8 @@ from .models import (
 class BrregClient:
     """
     A client for interacting with the Brønnøysund Register Centre (Brreg) API.
-    API Documentation: https://data.brreg.no/enhetsregisteret/api/dokumentasjon/no/index.html
+    API Documentation:
+    https://data.brreg.no/enhetsregisteret/api/dokumentasjon/no/index.html
     """
 
     BASE_URL = "https://data.brreg.no/enhetsregisteret/api"
@@ -74,7 +75,8 @@ class BrregClient:
             client: An optional httpx.AsyncClient instance. If not provided,
                     a new one is created.
             rate_limit: Optional rate limit in seconds between API calls.
-            cache_ttl: Optional time-to-live for cached responses. Defaults to 1 hour if caching is enabled.
+            cache_ttl: Optional time-to-live for cached responses.
+                       Defaults to 1 hour if caching is enabled.
             logger: Optional logger instance. If not provided, a default one is created.
             max_retries: Maximum number of retries for failed requests. Defaults to 3.
         """
@@ -152,7 +154,10 @@ class BrregClient:
             )
         elif status_code == 403:
             return BrregForbiddenError(
-                message="Access forbidden. You don't have permission to access this resource.",
+                message=(
+                    "Access forbidden. You don't have permission "
+                    "to access this resource."
+                ),
                 status_code=status_code,
                 response_text=response_text,
                 request_url=request_url,
@@ -201,16 +206,19 @@ class BrregClient:
         retry_enabled: bool = True,
     ) -> httpx.Response:
         """
-        Makes an asynchronous HTTP request to the Brreg API with retry logic, rate limiting, and caching.
+        Makes an asynchronous HTTP request to the Brreg API with retry logic,
+        rate limiting, and caching.
 
         Args:
             method: The HTTP method (e.g., "GET", "POST").
             endpoint: The API endpoint path (e.g., "/enheter").
             params: Optional query parameters.
             json: Optional JSON body for POST/PUT requests.
-            cache_key: Optional cache key for caching responses. If provided, and caching is enabled,
+            cache_key: Optional cache key for caching responses.
+                      If provided, and caching is enabled,
                       the response will be cached for the configured TTL.
-            retry_enabled: Whether to enable retry logic for this request. Defaults to True.
+            retry_enabled: Whether to enable retry logic for this request.
+                          Defaults to True.
 
         Returns:
             The httpx.Response object.
@@ -244,7 +252,8 @@ class BrregClient:
             except httpx.HTTPStatusError as exc:
                 error = self._map_http_error(exc)
                 self._logger.error(
-                    f"HTTP error {exc.response.status_code} for {exc.request.url}: {exc.response.text}",
+                    f"HTTP error {exc.response.status_code} for {exc.request.url}: "
+                    f"{exc.response.text}",
                     exc_info=True,
                 )
                 raise error
@@ -287,34 +296,35 @@ class BrregClient:
         self,
         method: str,
         endpoint: str,
-        accept_header: str,
         params: dict | None = None,
         retry_enabled: bool = True,
-    ) -> httpx.Response:
+    ) -> bytes:
         """
-        Makes an asynchronous HTTP request intended for downloading files with retry logic and rate limiting.
+        Makes an asynchronous HTTP request intended for downloading files
+        with retry logic and rate limiting.
 
         Args:
-            method: The HTTP method (usually "GET").
-            endpoint: The API endpoint path.
-            accept_header: The value for the 'Accept' header (e.g., 'text/csv').
+            method: The HTTP method (e.g., "GET", "POST").
+            endpoint: The API endpoint path (e.g., "/enheter").
             params: Optional query parameters.
-            retry_enabled: Whether to enable retry logic for this request. Defaults to True.
+            retry_enabled: Whether to enable retry logic for this request.
+                          Defaults to True.
 
         Returns:
-            The raw httpx.Response object, allowing access to content, headers, etc.
+            The response content as bytes.
 
         Raises:
             BrregAPIError: If the API returns an error or request fails.
         """
-        headers = {"Accept": accept_header}
-        self._logger.debug(f"Making download {method} request to {endpoint}")
+        headers = {"Accept": "*/*"}
+        self._logger.debug(f"Making download request to {endpoint}")
 
         # Define the actual request function
         async def make_request():
             await self._handle_rate_limit()
             try:
-                # Use stream=True if you anticipate large files and want to handle streaming
+                # Use stream=True if you anticipate large files and want to
+                # handle streaming
                 response = await self._client.request(
                     method, endpoint, params=params, headers=headers
                 )
@@ -323,7 +333,8 @@ class BrregClient:
             except httpx.HTTPStatusError as exc:
                 error = self._map_http_error(exc)
                 self._logger.error(
-                    f"HTTP error {exc.response.status_code} for {exc.request.url}: {exc.response.text}",
+                    f"HTTP error {exc.response.status_code} for {exc.request.url}: "
+                    f"{exc.response.text}",
                     exc_info=True,
                 )
                 raise error
@@ -355,7 +366,7 @@ class BrregClient:
         else:
             response = await make_request()
 
-        return response
+        return response.content
 
     async def __aenter__(self):
         """Enter the async context manager."""
@@ -369,18 +380,21 @@ class BrregClient:
         """Closes the underlying httpx client."""
         await self._client.aclose()
 
-    def clear_cache(self, pattern: str = None):
+    def clear_cache(self, pattern: str | None = None) -> int:
         """
-        Clears the cache, optionally based on a pattern.
+        Clears the cache.
 
         Args:
-            pattern: Optional string pattern to match against cache keys.
-                    If provided, only cache entries with keys containing this pattern will be cleared.
-                    If None, the entire cache will be cleared.
+            pattern: Optional pattern to selectively clear cache entries.
+                    If provided, only cache entries with keys containing this pattern
+                    will be cleared.
+
+        Returns:
+            The number of cache entries that were cleared.
         """
         if not self._cache_enabled:
             self._logger.warning("Cache is not enabled, nothing to clear")
-            return
+            return 0
 
         if pattern is None:
             # Clear all cache
@@ -393,8 +407,11 @@ class BrregClient:
             for k in keys_to_remove:
                 del self._cache[k]
             self._logger.info(
-                f"Cleared {len(keys_to_remove)} cache entries matching pattern '{pattern}'"
+                f"Cleared {len(keys_to_remove)} cache entries matching "
+                f"pattern '{pattern}'"
             )
+
+        return len(keys_to_remove)
 
     def get_cache_info(self) -> Dict[str, Any]:
         """
@@ -503,7 +520,8 @@ class BrregClient:
             organisasjonsnumre: A list of 9-digit organization numbers.
 
         Returns:
-            A dictionary mapping organization numbers to their respective Enhet or SlettetEnhet objects.
+            A dictionary mapping organization numbers to their respective Enhet or
+            SlettetEnhet objects.
         """
         self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} entities")
 
@@ -540,10 +558,22 @@ class BrregClient:
             An Enheter1 object containing the search results and metadata.
         """
         endpoint = "/enheter"
-        # Create cache key from sorted parameters
         cache_key = None
         if self._cache_enabled:
-            sorted_items = sorted(kwargs.items(), key=lambda x: x[0])
+            sorted_items = sorted(
+                [
+                    (k, v)
+                    for k, v in {
+                        "query": kwargs.get("navn"),
+                        "organization_form": kwargs.get("organisasjonsform"),
+                        "municipality": kwargs.get("kommunenummer"),
+                        "page": kwargs.get("page"),
+                        "size": kwargs.get("size"),
+                    }.items()
+                    if v is not None
+                ],
+                key=lambda x: x[0],
+            )
             param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
             cache_key = f"search_enheter_{param_str}"
 
@@ -626,13 +656,15 @@ class BrregClient:
         Retrieves information about a specific sub-entity (underenhet) by its
         organization number. Can also return a SlettetUnderenhet if the entity
         is deleted.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-detalj
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-detalj
 
         Args:
             organisasjonsnummer: The 9-digit organization number.
 
         Returns:
-            A Underenhet or SlettetUnderenhet object containing the entity's information.
+            A Underenhet or SlettetUnderenhet object containing the entity's
+            information.
         """
         endpoint = f"/underenheter/{organisasjonsnummer}"
         cache_key = f"underenhet_{organisasjonsnummer}"
@@ -663,7 +695,8 @@ class BrregClient:
             organisasjonsnumre: A list of 9-digit organization numbers.
 
         Returns:
-            A dictionary mapping organization numbers to their respective Underenhet or SlettetUnderenhet objects.
+            A dictionary mapping organization numbers to their respective Underenhet
+            or SlettetUnderenhet objects.
         """
         self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} sub-entities")
 
@@ -690,7 +723,8 @@ class BrregClient:
     async def search_underenheter(self, **kwargs) -> Underenheter1:
         """
         Searches for sub-entities (underenheter) based on various criteria.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-oppslag
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-oppslag
 
         Args:
             **kwargs: Search parameters as defined in the API documentation.
@@ -778,7 +812,8 @@ class BrregClient:
     async def get_rollegrupper(self) -> RolleRollegruppetyper:
         """
         Retrieves all role groups types.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-rollegrupper
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-rollegrupper
              (Old link, endpoint confirmed from user)
 
         Returns:
@@ -807,7 +842,8 @@ class BrregClient:
     async def get_roller(self) -> RolleRolletyper:
         """
         Retrieves all role types.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller
 
         Returns:
             A RolleRolletyper object containing the list of role types.
@@ -833,7 +869,8 @@ class BrregClient:
     async def get_enhet_roller(self, organisasjonsnummer: str) -> Roller:
         """
         Retrieves roles associated with a specific entity (enhet).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller-for-enhet
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller-for-enhet
 
         Args:
             organisasjonsnummer: The 9-digit organization number of the entity.
@@ -882,7 +919,8 @@ class BrregClient:
     async def get_kommuner(self) -> Kommuner1:
         """
         Retrieves all municipalities (kommuner).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-kommuner
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-kommuner
 
         Returns:
             A Kommuner1 object containing the list of municipalities.
@@ -925,7 +963,8 @@ class BrregClient:
     async def get_organisasjonsformer(self) -> Organisasjonsformer1:
         """
         Retrieves all organization forms.
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-organisasjonsformer
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-organisasjonsformer
 
         Returns:
             An Organisasjonsformer1 object containing the list of organization forms.
@@ -1034,7 +1073,8 @@ class BrregClient:
     async def get_enhet_oppdateringer(self, **kwargs) -> OppdateringerEnheter1:
         """
         Retrieves updates for entities (enheter).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-enheter
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-enheter
 
         Args:
             **kwargs: Optional query parameters like oppdateringsid, dato,
@@ -1057,7 +1097,8 @@ class BrregClient:
     ) -> OppdateringerUnderenheter1:
         """
         Retrieves updates for sub-entities (underenheter).
-        Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-underenheter
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-underenheter
 
         Args:
             **kwargs: Optional query parameters like oppdateringsid, dato,
@@ -1095,3 +1136,139 @@ class BrregClient:
         response = await self._request("GET", endpoint, params=params)
         # RolleOppdateringer is a RootModel expecting a list directly
         return RolleOppdateringer.model_validate(response.json())
+
+    async def get_organization(self, org_number: str) -> Union[Enhet, SlettetEnhet]:
+        """
+        Fetches detailed information about a specific organization.
+
+        Args:
+            org_number: The organization number to look up.
+
+        Returns:
+            An Enhet or SlettetEnhet object containing the organization's information.
+
+        Raises:
+            BrregResourceNotFoundError: If the organization is not found.
+            BrregAPIError: If the API returns an error.
+
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-detalj
+        """
+        endpoint = f"/enheter/{org_number}"
+        cache_key = f"enhet_{org_number}"
+
+        response = await self._request("GET", endpoint, cache_key=cache_key)
+        data = response.json()
+
+        # Check if it's a deleted entity
+        # (schema indicates 'slettedato'/'respons_klasse')
+        if data.get("respons_klasse") == "SlettetEnhet" or "slettedato" in data:
+            try:
+                # Attempt parsing as SlettetEnhet first
+                return SlettetEnhet.model_validate(data)
+            except Exception as e:
+                self._logger.error(f"Error parsing SlettetEnhet: {e}", exc_info=True)
+                # Fallback if parsing SlettetEnhet fails unexpectedly
+                pass
+        # Default to parsing as Enhet
+        return Enhet.model_validate(data)
+
+    async def get_organizations_batch(
+        self, org_numbers: List[str]
+    ) -> Dict[str, Union[Enhet, SlettetEnhet]]:
+        """
+        Fetches detailed information about multiple organizations in a batch.
+
+        Args:
+            org_numbers: A list of organization numbers to look up.
+
+        Returns:
+            A dictionary mapping organization numbers to their respective Enhet
+            or SlettetEnhet objects.
+
+        Raises:
+            BrregAPIError: If the API returns an error.
+        """
+        self._logger.debug(f"Fetching data for {len(org_numbers)} entities")
+
+        # Create tasks for each organization number
+        tasks = {
+            org_nr: asyncio.create_task(self.get_organization(org_nr))
+            for org_nr in org_numbers
+        }
+
+        # Wait for all tasks to complete
+        results = {}
+        for org_nr, task in tasks.items():
+            try:
+                results[org_nr] = await task
+            except Exception as e:
+                self._logger.error(
+                    f"Error fetching entity {org_nr}: {e}", exc_info=True
+                )
+                # Store the error in the results
+                results[org_nr] = e
+
+        return results
+
+    async def search_organizations(
+        self,
+        query: str | None = None,
+        organization_form: str | None = None,
+        municipality: str | None = None,
+        page: int = 0,
+        size: int = 20,
+    ) -> Enheter1:
+        """
+        Searches for organizations based on various criteria.
+
+        Args:
+            query: Free text search query.
+            organization_form: Organization form code.
+            municipality: Municipality code.
+            page: Page number for pagination, starting from 0.
+            size: Number of results per page, default 20.
+
+        Returns:
+            An Enheter1 object containing the search results.
+
+        Raises:
+            BrregAPIError: If the API returns an error.
+
+        Ref:
+        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-oppslag
+        """
+        endpoint = "/enheter"
+        cache_key = None
+        if self._cache_enabled:
+            sorted_items = sorted(
+                [
+                    (k, v)
+                    for k, v in {
+                        "query": query,
+                        "organization_form": organization_form,
+                        "municipality": municipality,
+                        "page": page,
+                        "size": size,
+                    }.items()
+                    if v is not None
+                ],
+                key=lambda x: x[0],
+            )
+            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
+            cache_key = f"search_enheter_{param_str}"
+
+        # Create params dictionary
+        params = {
+            "navn": query,
+            "organisasjonsform.kode": organization_form,
+            "kommunenummer": municipality,
+            "page": page,
+            "size": size,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+
+        response = await self._request(
+            "GET", endpoint, params=params, cache_key=cache_key
+        )
+        return Enheter1.model_validate(response.json())

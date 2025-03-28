@@ -20,12 +20,11 @@ import logging
 from datetime import timedelta
 
 from brreg_wrapper import (
-    BrregClient,
     BrregAPIError,
-    BrregResourceNotFoundError,
+    BrregClient,
     BrregRateLimitError,
+    BrregResourceNotFoundError,
 )
-
 
 # Set up logging
 logging.basicConfig(
@@ -81,13 +80,17 @@ async def main():
         logger.info("\n2. Demonstrating caching")
         logger.info("First request (will hit API):")
         start_time = asyncio.get_event_loop().time()
-        kpmg1 = await client.get_enhet(org_numbers[1])
+        await client.get_enhet(
+            org_numbers[1]
+        )  # Just make the request, don't need to store result
         first_request_time = asyncio.get_event_loop().time() - start_time
         print(f"First request took {first_request_time:.4f} seconds")
 
         logger.info("Second request (should use cache):")
         start_time = asyncio.get_event_loop().time()
-        kpmg2 = await client.get_enhet(org_numbers[1])
+        await client.get_enhet(
+            org_numbers[1]
+        )  # Just make the request, don't need to store result
         second_request_time = asyncio.get_event_loop().time() - start_time
         print(f"Second request took {second_request_time:.4f} seconds")
         print(f"Cache info: {client.get_cache_info()}")
@@ -119,7 +122,8 @@ async def main():
         logger.info("\n5. Searching for organizations")
         search_results = await client.search_enheter(navn="Microsoft")
         print(
-            f"Found {search_results.page.totalElements} organizations matching 'Microsoft'"
+            f"Found {search_results.page.totalElements}\
+                  organizations matching 'Microsoft'"
         )
         for i, org in enumerate(search_results.field_embedded.enheter[:3], 1):
             print(f"  {i}. {org.navn} ({org.organisasjonsnummer})")
@@ -129,7 +133,8 @@ async def main():
         org_forms = await client.get_organisasjonsformer()
         org_forms_sample = list(org_forms.field_embedded.organisasjonsformer)[:3]
         print(
-            f"Found {len(org_forms.field_embedded.organisasjonsformer)} organization forms"
+            f"Found {len(org_forms.field_embedded.organisasjonsformer)}\
+                organization forms"
         )
         for form in org_forms_sample:
             print(f"  • {form.kode}: {form.beskrivelse}")

@@ -1,5 +1,5 @@
-from datetime import date, timedelta
 import time
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -9,14 +9,11 @@ from brreg_wrapper.client import BrregClient
 from brreg_wrapper.exceptions import (
     BrregAPIError,
     BrregAuthenticationError,
-    BrregClientError,
-    BrregConnectionError,
     BrregForbiddenError,
     BrregRateLimitError,
     BrregResourceNotFoundError,
     BrregServerError,
     BrregServiceUnavailableError,
-    BrregTimeoutError,
     BrregValidationError,
 )
 from brreg_wrapper.models import (
