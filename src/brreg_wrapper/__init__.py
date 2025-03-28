@@ -24,7 +24,7 @@ __all__ = [
     "BrregDataError",
     "BrregForbiddenError",
     "BrregRateLimitError",
-    "BrregResourceNotFoundError", 
+    "BrregResourceNotFoundError",
     "BrregServerError",
     "BrregServiceUnavailableError",
     "BrregTimeoutError",

@@ -503,16 +503,16 @@ async def test_caching(httpx_mock: HTTPXMock):
         # First call should hit the API
         enhet1 = await client.get_enhet(org_nr)
         assert enhet1.navn == "Cache Test AS"
-        
+
         # Second call should use the cache
         enhet2 = await client.get_enhet(org_nr)
         assert enhet2.navn == "Cache Test AS"
-        
+
         # Verify cache info
         cache_info = client.get_cache_info()
         assert cache_info["count"] == 1
         assert "enhet" in str(cache_info["categories"])
-        
+
         # Clear the cache
         client.clear_cache()
         assert client.get_cache_info()["count"] == 0
@@ -528,27 +528,27 @@ async def test_rate_limiting():
     try:
         # Record timing for two API calls that would hit rate limits
         # We'll mock the _request method to avoid actual API calls
-        
+
         original_request = client._request
         request_times = []
-        
+
         # Replace _request with a mock that just records times
         async def mock_request(*args, **kwargs):
             request_times.append(time.time())
             return httpx.Response(200, json={})
-            
+
         client._request = mock_request
-        
+
         # Make two quick requests
         await client.get_services()
         await client.get_services()
-        
+
         # Restore original method
         client._request = original_request
-        
+
         # Calculate time difference
         time_diff = request_times[1] - request_times[0]
-        
+
         # Assert that the second request was delayed by at least the rate limit
         assert time_diff >= 0.2
     finally:
@@ -561,31 +561,35 @@ async def test_get_multiple_enheter(httpx_mock: HTTPXMock):
     # Setup mock responses for two different orgs
     org_nr1 = "123456789"
     org_nr2 = "987654321"
-    
+
     mock_response1 = {
         "organisasjonsnummer": org_nr1,
         "navn": "Batch Test 1 AS",
         "organisasjonsform": {
             "kode": "AS",
             "beskrivelse": "Aksjeselskap",
-            "_links": {"self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}},
+            "_links": {
+                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
+            },
         },
         "registreringsdatoEnhetsregisteret": "2023-01-01",
         "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr1}"}},
     }
-    
+
     mock_response2 = {
         "organisasjonsnummer": org_nr2,
         "navn": "Batch Test 2 AS",
         "organisasjonsform": {
             "kode": "AS",
             "beskrivelse": "Aksjeselskap",
-            "_links": {"self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}},
+            "_links": {
+                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
+            },
         },
         "registreringsdatoEnhetsregisteret": "2023-02-01",
         "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr2}"}},
     }
-    
+
     # Add mock responses
     httpx_mock.add_response(
         url=f"{BrregClient.BASE_URL}/enheter/{org_nr1}",
@@ -593,19 +597,19 @@ async def test_get_multiple_enheter(httpx_mock: HTTPXMock):
         json=mock_response1,
         status_code=200,
     )
-    
+
     httpx_mock.add_response(
         url=f"{BrregClient.BASE_URL}/enheter/{org_nr2}",
         method="GET",
         json=mock_response2,
         status_code=200,
     )
-    
+
     # Create client and test batch operation
     client = BrregClient()
     try:
         results = await client.get_multiple_enheter([org_nr1, org_nr2])
-        
+
         # Verify results
         assert len(results) == 2
         assert results[org_nr1].navn == "Batch Test 1 AS"
@@ -619,7 +623,7 @@ async def test_error_handling(httpx_mock: HTTPXMock):
     """Test that different HTTP errors map to the correct exception types."""
     org_nr = "123456789"
     base_url = f"{BrregClient.BASE_URL}/enheter/{org_nr}"
-    
+
     error_mappings = [
         # (status_code, exception_class, error_message_pattern)
         (400, BrregValidationError, "Invalid request"),
@@ -630,11 +634,11 @@ async def test_error_handling(httpx_mock: HTTPXMock):
         (500, BrregServerError, "HTTP error 500"),
         (503, BrregServiceUnavailableError, "Service temporarily unavailable"),
     ]
-    
+
     for status_code, exception_class, error_pattern in error_mappings:
         # Reset mock for each iteration
         httpx_mock.reset(assert_all_responses_were_requested=False)
-        
+
         # Setup mock response for this status code
         httpx_mock.add_response(
             url=base_url,
@@ -642,13 +646,13 @@ async def test_error_handling(httpx_mock: HTTPXMock):
             json={"message": "Error message"},
             status_code=status_code,
         )
-        
+
         # Test with fresh client each time
         client = BrregClient()
         try:
             with pytest.raises(exception_class) as excinfo:
                 await client.get_enhet(org_nr)
-            
+
             # Verify exception attributes
             assert excinfo.value.status_code == status_code
             assert error_pattern in str(excinfo.value)
@@ -664,23 +668,21 @@ async def test_response_json_property():
     error = BrregAPIError(
         message="Test error",
         response_text='{"error": "test", "code": 123}',
-        status_code=400
+        status_code=400,
     )
-    
+
     # Test response_json property
     json_data = error.response_json
     assert json_data is not None
     assert json_data["error"] == "test"
     assert json_data["code"] == 123
-    
+
     # Test with invalid JSON
     error = BrregAPIError(
-        message="Test error",
-        response_text='{"error": invalid json',
-        status_code=400
+        message="Test error", response_text='{"error": invalid json', status_code=400
     )
     assert error.response_json is None
-    
+
     # Test with no response text
     error = BrregAPIError(message="Test error", status_code=400)
     assert error.response_json is None
