@@ -1,7 +1,30 @@
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple, Union
+import time
+import logging
+import asyncio
+from datetime import datetime, timedelta
 
 import httpx
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
+from .exceptions import (
+    BrregAPIError,
+    BrregClientError,
+    BrregConnectionError,
+    BrregRateLimitError,
+    BrregResourceNotFoundError,
+    BrregServerError,
+    BrregTimeoutError,
+    BrregValidationError,
+    BrregAuthenticationError,
+    BrregForbiddenError,
+    BrregServiceUnavailableError,
+)
 from .models import (
     Enhet,
     Enheter1,
@@ -34,7 +57,15 @@ class BrregClient:
 
     BASE_URL = "https://data.brreg.no/enhetsregisteret/api"
 
-    def __init__(self, timeout: float = 10.0, client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        timeout: float = 10.0,
+        client: httpx.AsyncClient | None = None,
+        rate_limit: Optional[float] = None,
+        cache_ttl: Optional[timedelta] = None,
+        logger: Optional[logging.Logger] = None,
+        max_retries: int = 3,
+    ):
         """
         Initializes the BrregClient.
 
@@ -42,10 +73,123 @@ class BrregClient:
             timeout: The timeout for HTTP requests in seconds. Defaults to 10.0.
             client: An optional httpx.AsyncClient instance. If not provided,
                     a new one is created.
+            rate_limit: Optional rate limit in seconds between API calls.
+            cache_ttl: Optional time-to-live for cached responses. Defaults to 1 hour if caching is enabled.
+            logger: Optional logger instance. If not provided, a default one is created.
+            max_retries: Maximum number of retries for failed requests. Defaults to 3.
         """
         self._client = client or httpx.AsyncClient(
             base_url=self.BASE_URL, timeout=timeout
         )
+        self._rate_limit = rate_limit
+        self._last_request_time = 0
+        self._cache_enabled = cache_ttl is not None
+        self._cache_ttl = cache_ttl or timedelta(hours=1)
+        self._cache = {}
+        self._logger = logger or logging.getLogger(__name__)
+        self._max_retries = max_retries
+
+    async def _handle_rate_limit(self):
+        """
+        Handles rate limiting by sleeping if necessary.
+        """
+        if self._rate_limit:
+            current_time = time.time()
+            time_since_last = current_time - self._last_request_time
+            if time_since_last < self._rate_limit:
+                delay = self._rate_limit - time_since_last
+                self._logger.debug(f"Rate limiting: sleeping for {delay:.2f} seconds")
+                await asyncio.sleep(delay)
+            self._last_request_time = time.time()
+
+    def _map_http_error(self, exc: httpx.HTTPStatusError) -> BrregAPIError:
+        """
+        Maps HTTP exceptions to specific Brreg exceptions.
+
+        Args:
+            exc: The original httpx.HTTPStatusError.
+
+        Returns:
+            An appropriate BrregAPIError subclass.
+        """
+        status_code = exc.response.status_code
+        message = f"HTTP error {status_code} while accessing {exc.request.url}"
+        response_text = exc.response.text
+        request_url = str(exc.request.url)
+        request_params = getattr(exc.request, "params", None)
+
+        if status_code == 404:
+            return BrregResourceNotFoundError(
+                message=f"Resource not found: {exc.request.url}",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif status_code == 429:
+            return BrregRateLimitError(
+                message="Rate limit exceeded. Please slow down your requests.",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif status_code == 400:
+            return BrregValidationError(
+                message=f"Invalid request parameters: {exc.request.url}",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif status_code == 401:
+            return BrregAuthenticationError(
+                message="Authentication required or invalid credentials",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif status_code == 403:
+            return BrregForbiddenError(
+                message="Access forbidden. You don't have permission to access this resource.",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif status_code == 503:
+            return BrregServiceUnavailableError(
+                message="Service temporarily unavailable. Please try again later.",
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif 400 <= status_code < 500:
+            return BrregClientError(
+                message=message,
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        elif 500 <= status_code < 600:
+            return BrregServerError(
+                message=message,
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
+        else:
+            return BrregAPIError(
+                message=message,
+                status_code=status_code,
+                response_text=response_text,
+                request_url=request_url,
+                request_params=request_params,
+            )
 
     async def _request(
         self,
@@ -53,40 +197,91 @@ class BrregClient:
         endpoint: str,
         params: dict | None = None,
         json: dict | None = None,
+        cache_key: str | None = None,
+        retry_enabled: bool = True,
     ) -> httpx.Response:
         """
-        Makes an asynchronous HTTP request to the Brreg API.
+        Makes an asynchronous HTTP request to the Brreg API with retry logic, rate limiting, and caching.
 
         Args:
             method: The HTTP method (e.g., "GET", "POST").
             endpoint: The API endpoint path (e.g., "/enheter").
             params: Optional query parameters.
             json: Optional JSON body for POST/PUT requests.
+            cache_key: Optional cache key for caching responses. If provided, and caching is enabled,
+                      the response will be cached for the configured TTL.
+            retry_enabled: Whether to enable retry logic for this request. Defaults to True.
 
         Returns:
             The httpx.Response object.
 
-            Raises:
-            httpx.HTTPStatusError: If the API returns an error status code.
+        Raises:
+            BrregAPIError: If the API returns an error or request fails.
         """
+        # Check cache if enabled and it's a GET request
+        if self._cache_enabled and method.upper() == "GET" and cache_key:
+            cached_item = self._cache.get(cache_key)
+            if cached_item:
+                data, timestamp = cached_item
+                if datetime.now() - timestamp < self._cache_ttl:
+                    self._logger.debug(f"Cache hit for {cache_key}")
+                    return data
+                else:
+                    self._logger.debug(f"Cache expired for {cache_key}")
+
         headers = {"Accept": "application/json"}
-        try:
-            response = await self._client.request(
-                method, endpoint, params=params, json=json, headers=headers
+        self._logger.debug(f"Making {method} request to {endpoint}")
+
+        # Define the actual request function
+        async def make_request():
+            await self._handle_rate_limit()
+            try:
+                response = await self._client.request(
+                    method, endpoint, params=params, json=json, headers=headers
+                )
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as exc:
+                error = self._map_http_error(exc)
+                self._logger.error(
+                    f"HTTP error {exc.response.status_code} for {exc.request.url}: {exc.response.text}",
+                    exc_info=True,
+                )
+                raise error
+            except httpx.TimeoutException as exc:
+                self._logger.error(f"Request timed out: {exc}", exc_info=True)
+                raise BrregTimeoutError(f"Request timed out: {exc}")
+            except httpx.ConnectError as exc:
+                self._logger.error(f"Connection error: {exc}", exc_info=True)
+                raise BrregConnectionError(f"Connection error: {exc}")
+            except httpx.RequestError as exc:
+                self._logger.error(f"Request error: {exc}", exc_info=True)
+                raise BrregAPIError(f"Request error: {exc}")
+
+        # Execute with retry if enabled
+        if retry_enabled and self._max_retries > 0:
+            # Define retry decorator dynamically to use instance attributes
+            retry_decorator = retry(
+                stop=stop_after_attempt(self._max_retries),
+                wait=wait_exponential(multiplier=1, min=4, max=10),
+                retry=retry_if_exception_type(
+                    (BrregServerError, BrregConnectionError, BrregTimeoutError)
+                ),
+                reraise=True,
             )
-            # Raise an exception for 4xx or 5xx status codes
-            response.raise_for_status()
-            return response
-        except httpx.RequestError as exc:
-            print(f"An error occurred while requesting {exc.request.url!r}: {exc}")
-            raise  # Re-raise or handle specific errors as needed
-        except httpx.HTTPStatusError as exc:
-            error_message = (
-                f"Error response {exc.response.status_code} "
-                f"while requesting {exc.request.url!r}: {exc.response.text}"
-            )
-            print(error_message)
-            raise  # Re-raise or handle specific errors as needed
+
+            # Apply retry decorator
+            make_request_with_retry = retry_decorator(make_request)
+            response = await make_request_with_retry()
+        else:
+            response = await make_request()
+
+        # Cache the response if appropriate
+        if self._cache_enabled and method.upper() == "GET" and cache_key:
+            self._logger.debug(f"Caching response for {cache_key}")
+            self._cache[cache_key] = (response, datetime.now())
+
+        return response
 
     async def _download_request(
         self,
@@ -94,40 +289,73 @@ class BrregClient:
         endpoint: str,
         accept_header: str,
         params: dict | None = None,
+        retry_enabled: bool = True,
     ) -> httpx.Response:
         """
-        Makes an asynchronous HTTP request intended for downloading files.
+        Makes an asynchronous HTTP request intended for downloading files with retry logic and rate limiting.
 
         Args:
             method: The HTTP method (usually "GET").
             endpoint: The API endpoint path.
             accept_header: The value for the 'Accept' header (e.g., 'text/csv').
             params: Optional query parameters.
+            retry_enabled: Whether to enable retry logic for this request. Defaults to True.
 
         Returns:
             The raw httpx.Response object, allowing access to content, headers, etc.
 
         Raises:
-            httpx.HTTPStatusError: If the API returns an error status code.
+            BrregAPIError: If the API returns an error or request fails.
         """
         headers = {"Accept": accept_header}
-        try:
-            # Use stream=True if you anticipate large files and want to handle streaming
-            response = await self._client.request(
-                method, endpoint, params=params, headers=headers
+        self._logger.debug(f"Making download {method} request to {endpoint}")
+
+        # Define the actual request function
+        async def make_request():
+            await self._handle_rate_limit()
+            try:
+                # Use stream=True if you anticipate large files and want to handle streaming
+                response = await self._client.request(
+                    method, endpoint, params=params, headers=headers
+                )
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as exc:
+                error = self._map_http_error(exc)
+                self._logger.error(
+                    f"HTTP error {exc.response.status_code} for {exc.request.url}: {exc.response.text}",
+                    exc_info=True,
+                )
+                raise error
+            except httpx.TimeoutException as exc:
+                self._logger.error(f"Request timed out: {exc}", exc_info=True)
+                raise BrregTimeoutError(f"Request timed out: {exc}")
+            except httpx.ConnectError as exc:
+                self._logger.error(f"Connection error: {exc}", exc_info=True)
+                raise BrregConnectionError(f"Connection error: {exc}")
+            except httpx.RequestError as exc:
+                self._logger.error(f"Request error: {exc}", exc_info=True)
+                raise BrregAPIError(f"Request error: {exc}")
+
+        # Execute with retry if enabled
+        if retry_enabled and self._max_retries > 0:
+            # Define retry decorator dynamically to use instance attributes
+            retry_decorator = retry(
+                stop=stop_after_attempt(self._max_retries),
+                wait=wait_exponential(multiplier=1, min=4, max=10),
+                retry=retry_if_exception_type(
+                    (BrregServerError, BrregConnectionError, BrregTimeoutError)
+                ),
+                reraise=True,
             )
-            response.raise_for_status()
-            return response
-        except httpx.RequestError as exc:
-            print(f"An error occurred while requesting {exc.request.url!r}: {exc}")
-            raise
-        except httpx.HTTPStatusError as exc:
-            error_message = (
-                f"Error response {exc.response.status_code} "
-                f"while requesting {exc.request.url!r}: {exc.response.text}"
-            )
-            print(error_message)
-            raise
+
+            # Apply retry decorator
+            make_request_with_retry = retry_decorator(make_request)
+            response = await make_request_with_retry()
+        else:
+            response = await make_request()
+
+        return response
 
     async def __aenter__(self):
         """Enter the async context manager."""
@@ -140,6 +368,77 @@ class BrregClient:
     async def close(self):
         """Closes the underlying httpx client."""
         await self._client.aclose()
+
+    def clear_cache(self, pattern: str = None):
+        """
+        Clears the cache, optionally based on a pattern.
+
+        Args:
+            pattern: Optional string pattern to match against cache keys.
+                    If provided, only cache entries with keys containing this pattern will be cleared.
+                    If None, the entire cache will be cleared.
+        """
+        if not self._cache_enabled:
+            self._logger.warning("Cache is not enabled, nothing to clear")
+            return
+
+        if pattern is None:
+            # Clear all cache
+            before_count = len(self._cache)
+            self._cache.clear()
+            self._logger.info(f"Cleared entire cache ({before_count} entries)")
+        else:
+            # Clear only entries matching pattern
+            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+            for k in keys_to_remove:
+                del self._cache[k]
+            self._logger.info(
+                f"Cleared {len(keys_to_remove)} cache entries matching pattern '{pattern}'"
+            )
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        Returns information about the current cache state.
+
+        Returns:
+            A dictionary containing cache statistics.
+        """
+        if not self._cache_enabled:
+            return {"enabled": False, "count": 0, "oldest": None, "newest": None}
+
+        entries = len(self._cache)
+        if entries == 0:
+            return {"enabled": True, "count": 0, "oldest": None, "newest": None}
+
+        # Get cache entry timestamps
+        timestamps = [ts for _, (_, ts) in enumerate(self._cache.values())]
+        oldest = min(timestamps)
+        newest = max(timestamps)
+
+        # Get cache key categories
+        categories = {}
+        for key in self._cache.keys():
+            category = key.split("_")[0] if "_" in key else "other"
+            categories[category] = categories.get(category, 0) + 1
+
+        return {
+            "enabled": True,
+            "count": entries,
+            "oldest": oldest,
+            "newest": newest,
+            "ttl_seconds": self._cache_ttl.total_seconds(),
+            "categories": categories,
+        }
+
+    def set_cache_ttl(self, ttl: timedelta):
+        """
+        Sets a new time-to-live for the cache.
+
+        Args:
+            ttl: The new cache TTL as a timedelta.
+        """
+        self._cache_ttl = ttl
+        self._logger.info(f"Cache TTL set to {ttl.total_seconds()} seconds")
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Generelt Endpoints
@@ -176,19 +475,57 @@ class BrregClient:
                   types like dates correctly.
         """
         endpoint = f"/enheter/{organisasjonsnummer}"
-        response = await self._request("GET", endpoint)
+        cache_key = f"enhet_{organisasjonsnummer}"
+
+        response = await self._request("GET", endpoint, cache_key=cache_key)
         data = response.json()
+
         # Check if it's a deleted entity
         # (schema indicates 'slettedato'/'respons_klasse')
         if data.get("respons_klasse") == "SlettetEnhet" or "slettedato" in data:
             try:
                 # Attempt parsing as SlettetEnhet first
                 return SlettetEnhet.model_validate(data)
-            except Exception:
+            except Exception as e:
+                self._logger.error(f"Error parsing SlettetEnhet: {e}", exc_info=True)
                 # Fallback if parsing SlettetEnhet fails unexpectedly
                 pass
         # Default to parsing as Enhet
         return Enhet.model_validate(data)
+
+    async def get_multiple_enheter(
+        self, organisasjonsnumre: List[str]
+    ) -> Dict[str, Union[Enhet, SlettetEnhet]]:
+        """
+        Retrieves information about multiple entities (enheter) in parallel.
+
+        Args:
+            organisasjonsnumre: A list of 9-digit organization numbers.
+
+        Returns:
+            A dictionary mapping organization numbers to their respective Enhet or SlettetEnhet objects.
+        """
+        self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} entities")
+
+        # Create tasks for each organization number
+        tasks = {
+            org_nr: asyncio.create_task(self.get_enhet(org_nr))
+            for org_nr in organisasjonsnumre
+        }
+
+        # Wait for all tasks to complete
+        results = {}
+        for org_nr, task in tasks.items():
+            try:
+                results[org_nr] = await task
+            except Exception as e:
+                self._logger.error(
+                    f"Error fetching entity {org_nr}: {e}", exc_info=True
+                )
+                # Store the error in the results
+                results[org_nr] = e
+
+        return results
 
     async def search_enheter(self, **kwargs) -> Enheter1:
         """
@@ -200,15 +537,19 @@ class BrregClient:
                       Examples: navn, organisasjonsform, postadresse.postnummer, etc.
 
         Returns:
-            An Enheter1 object containing the search results.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
+            An Enheter1 object containing the search results and metadata.
         """
         endpoint = "/enheter"
-        params = {
-            k: v for k, v in kwargs.items() if v is not None
-        }  # Filter out None values
-        response = await self._request("GET", endpoint, params=params)
+        # Create cache key from sorted parameters
+        cache_key = None
+        if self._cache_enabled:
+            sorted_items = sorted(kwargs.items(), key=lambda x: x[0])
+            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
+            cache_key = f"search_enheter_{param_str}"
+
+        response = await self._request(
+            "GET", endpoint, params=kwargs, cache_key=cache_key
+        )
         return Enheter1.model_validate(response.json())
 
     async def download_enheter_json(self, **kwargs) -> httpx.Response:
@@ -288,27 +629,63 @@ class BrregClient:
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-detalj
 
         Args:
-            organisasjonsnummer: The 9-digit organization number of the sub-entity.
+            organisasjonsnummer: The 9-digit organization number.
 
         Returns:
-            A Underenhet or SlettetUnderenhet object containing the
-            sub-entity's information.
-            Note: Use `.model_dump(mode="json")` for JSON serialization to handle
-                  types like dates correctly.
+            A Underenhet or SlettetUnderenhet object containing the entity's information.
         """
         endpoint = f"/underenheter/{organisasjonsnummer}"
-        response = await self._request("GET", endpoint)
+        cache_key = f"underenhet_{organisasjonsnummer}"
+
+        response = await self._request("GET", endpoint, cache_key=cache_key)
         data = response.json()
+
         # Check if it's a deleted entity
-        if data.get("respons_klasse") == "SlettetEnhet" or "slettedato" in data:
+        if data.get("respons_klasse") == "SlettetUnderenhet" or "slettedato" in data:
             try:
-                # Attempt parsing as SlettetUnderenhet first
                 return SlettetUnderenhet.model_validate(data)
-            except Exception:
+            except Exception as e:
+                self._logger.error(
+                    f"Error parsing SlettetUnderenhet: {e}", exc_info=True
+                )
                 # Fallback if parsing SlettetUnderenhet fails unexpectedly
                 pass
         # Default to parsing as Underenhet
         return Underenhet.model_validate(data)
+
+    async def get_multiple_underenheter(
+        self, organisasjonsnumre: List[str]
+    ) -> Dict[str, Union[Underenhet, SlettetUnderenhet]]:
+        """
+        Retrieves information about multiple sub-entities (underenheter) in parallel.
+
+        Args:
+            organisasjonsnumre: A list of 9-digit organization numbers.
+
+        Returns:
+            A dictionary mapping organization numbers to their respective Underenhet or SlettetUnderenhet objects.
+        """
+        self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} sub-entities")
+
+        # Create tasks for each organization number
+        tasks = {
+            org_nr: asyncio.create_task(self.get_underenhet(org_nr))
+            for org_nr in organisasjonsnumre
+        }
+
+        # Wait for all tasks to complete
+        results = {}
+        for org_nr, task in tasks.items():
+            try:
+                results[org_nr] = await task
+            except Exception as e:
+                self._logger.error(
+                    f"Error fetching sub-entity {org_nr}: {e}", exc_info=True
+                )
+                # Store the error in the results
+                results[org_nr] = e
+
+        return results
 
     async def search_underenheter(self, **kwargs) -> Underenheter1:
         """
@@ -317,17 +694,22 @@ class BrregClient:
 
         Args:
             **kwargs: Search parameters as defined in the API documentation.
+                      Examples: navn, organisasjonsform, postadresse.postnummer, etc.
 
         Returns:
-            A Underenheter1 object containing the search results.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
+            A Underenheter1 object containing the search results and metadata.
         """
         endpoint = "/underenheter"
-        params = {
-            k: v for k, v in kwargs.items() if v is not None
-        }  # Filter out None values
-        response = await self._request("GET", endpoint, params=params)
+        # Create cache key from sorted parameters
+        cache_key = None
+        if self._cache_enabled:
+            sorted_items = sorted(kwargs.items(), key=lambda x: x[0])
+            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
+            cache_key = f"search_underenheter_{param_str}"
+
+        response = await self._request(
+            "GET", endpoint, params=kwargs, cache_key=cache_key
+        )
         return Underenheter1.model_validate(response.json())
 
     async def download_underenheter_json(self, **kwargs) -> httpx.Response:

@@ -8,6 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+.test_venv
+test_venv/
 
 # IDE directories
 .vscode/
