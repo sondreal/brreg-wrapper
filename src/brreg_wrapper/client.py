@@ -196,6 +196,22 @@ class BrregClient:
                 request_params=request_params,
             )
 
+    def _log_mapped_http_error(self, exc: httpx.HTTPStatusError) -> None:
+        """Log a mapped HTTP error at a level matching its severity.
+
+        404 is an expected miss (callers often try enhet, then underenhet),
+        so it is logged at DEBUG without exception info. Other HTTP errors
+        stay at ERROR with traceback.
+        """
+        message = (
+            f"HTTP error {exc.response.status_code} for {exc.request.url}: "
+            f"{exc.response.text}"
+        )
+        if exc.response.status_code == 404:
+            self._logger.debug(message)
+        else:
+            self._logger.error(message, exc_info=True)
+
     async def _request(
         self,
         method: str,
@@ -251,11 +267,7 @@ class BrregClient:
                 return response
             except httpx.HTTPStatusError as exc:
                 error = self._map_http_error(exc)
-                self._logger.error(
-                    f"HTTP error {exc.response.status_code} for {exc.request.url}: "
-                    f"{exc.response.text}",
-                    exc_info=True,
-                )
+                self._log_mapped_http_error(exc)
                 raise error
             except httpx.TimeoutException as exc:
                 self._logger.error(f"Request timed out: {exc}", exc_info=True)
@@ -332,11 +344,7 @@ class BrregClient:
                 return response
             except httpx.HTTPStatusError as exc:
                 error = self._map_http_error(exc)
-                self._logger.error(
-                    f"HTTP error {exc.response.status_code} for {exc.request.url}: "
-                    f"{exc.response.text}",
-                    exc_info=True,
-                )
+                self._log_mapped_http_error(exc)
                 raise error
             except httpx.TimeoutException as exc:
                 self._logger.error(f"Request timed out: {exc}", exc_info=True)

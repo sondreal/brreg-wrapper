@@ -290,7 +290,9 @@ async def test_async_context_manager():
 
 
 @pytest.mark.asyncio
-async def test_get_enhet_not_found(httpx_mock: HTTPXMock):
+async def test_get_enhet_not_found(
+    httpx_mock: HTTPXMock, caplog: pytest.LogCaptureFixture
+):
     """Test handling of a 404 Not Found error when retrieving an entity."""
     org_nr = "123456789"
     expected_url = f"{BrregClient.BASE_URL}/enheter/{org_nr}"
@@ -304,15 +306,51 @@ async def test_get_enhet_not_found(httpx_mock: HTTPXMock):
 
     client = BrregClient()
     try:
-        with pytest.raises(httpx.HTTPStatusError) as exc_info:
-            await client.get_enhet(org_nr)
+        with caplog.at_level("DEBUG", logger="brreg_wrapper.client"):
+            with pytest.raises(BrregResourceNotFoundError) as exc_info:
+                await client.get_enhet(org_nr)
 
-        assert exc_info.value.response.status_code == 404
+        assert exc_info.value.status_code == 404
+        assert not any(record.levelname == "ERROR" for record in caplog.records)
+        assert any(
+            record.levelname == "DEBUG" and "HTTP error 404" in record.message
+            for record in caplog.records
+        )
 
         # Verify the request was made
         request = httpx_mock.get_request()
         assert request is not None
         assert str(request.url) == expected_url
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_get_enhet_server_error_logs_at_error(
+    httpx_mock: HTTPXMock, caplog: pytest.LogCaptureFixture
+):
+    """5xx responses should still be logged at ERROR with exception info."""
+    org_nr = "123456789"
+    expected_url = f"{BrregClient.BASE_URL}/enheter/{org_nr}"
+
+    httpx_mock.add_response(
+        url=expected_url,
+        method="GET",
+        status_code=500,
+        json={"message": "Internal Server Error"},
+    )
+
+    client = BrregClient(max_retries=0)
+    try:
+        with caplog.at_level("DEBUG", logger="brreg_wrapper.client"):
+            with pytest.raises(BrregServerError) as exc_info:
+                await client.get_enhet(org_nr)
+
+        assert exc_info.value.status_code == 500
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert error_records
+        assert any("HTTP error 500" in record.message for record in error_records)
+        assert any(record.exc_info is not None for record in error_records)
     finally:
         await client.close()
 
@@ -697,9 +735,7 @@ async def test_get_underenhet_with_historiske_navn(httpx_mock: HTTPXMock):
             "kode": "BEDR",
             "beskrivelse": "Underenhet til næringsdrivende og offentlig forvaltning",
             "_links": {
-                "self": {
-                    "href": f"{BrregClient.BASE_URL}/organisasjonsformer/BEDR"
-                }
+                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/BEDR"}
             },
         },
         "historiskeNavn": [
@@ -712,9 +748,7 @@ async def test_get_underenhet_with_historiske_navn(httpx_mock: HTTPXMock):
         "registrertIMvaregisteret": False,
         "registreringsdatoEnhetsregisteret": "1995-02-22",
         "harRegistrertAntallAnsatte": True,
-        "_links": {
-            "self": {"href": f"{BrregClient.BASE_URL}/underenheter/{org_nr}"}
-        },
+        "_links": {"self": {"href": f"{BrregClient.BASE_URL}/underenheter/{org_nr}"}},
     }
     expected_url = f"{BrregClient.BASE_URL}/underenheter/{org_nr}"
 
