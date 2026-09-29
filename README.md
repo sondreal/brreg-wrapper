@@ -96,8 +96,8 @@ async def main():
     # Second request uses cache
     entity2 = await client.get_enhet("923609016")
     
-    # Clear specific cache entries
-    client.clear_cache(pattern="enhet_")
+    # Clear specific cache entries (keys are request paths + query string)
+    client.clear_cache(pattern="/enheter/923609016")
     
     # Get cache statistics
     cache_info = client.get_cache_info()
@@ -107,14 +107,22 @@ async def main():
 ### Error Handling & Retry Logic
 
 ```python
-from brreg_wrapper import BrregClient, BrregAPIError, BrregRateLimitError
+from brreg_wrapper import (
+    BrregAPIError,
+    BrregClient,
+    BrregRateLimitError,
+    BrregResourceNotFoundError,
+)
 
 async def main():
-    # Configure with automatic retries for transient errors
-    client = BrregClient(max_retries=3)
+    # Transient errors (5xx, 429, timeouts, connection errors) are retried
+    # with exponential backoff, honouring the server's Retry-After header.
+    client = BrregClient(max_retries=3)  # up to 4 attempts in total
     
     try:
-        entity = await client.get_enhet("invalid_org_nr")  # Will raise exception
+        entity = await client.get_enhet("999999999")  # Will raise exception
+    except BrregResourceNotFoundError:
+        print("No such organization")
     except BrregRateLimitError:
         # Handle rate limit specifically
         print("Rate limit exceeded, try again later")
@@ -131,12 +139,12 @@ from brreg_wrapper import BrregClient
 async def main():
     client = BrregClient()
     
-    # Fetch multiple entities in parallel
+    # Fetch multiple entities concurrently (at most 10 requests in flight)
     org_numbers = ["923609016", "998463718", "913492978"]
-    results = await client.get_multiple_enheter(org_numbers)
+    results = await client.get_multiple_enheter(org_numbers, max_concurrency=10)
     
     for org_nr, entity in results.items():
-        if isinstance(entity, Exception):
+        if isinstance(entity, BrregAPIError):
             print(f"Error fetching {org_nr}: {entity}")
         else:
             print(f"{org_nr}: {entity.navn}")
@@ -159,12 +167,11 @@ async def main():
 We use pytest for testing. To run the tests:
 
 ```bash
+# Using UV (recommended)
+uv run --extra dev pytest
+
 # Using pip
 pip install -e ".[dev]"
-pytest
-
-# Using UV (recommended)
-uv pip install -e ".[dev]"
 pytest
 ```
 
