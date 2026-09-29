@@ -6,7 +6,7 @@ errors that may occur when interacting with the Brønnøysund Register Centre AP
 """
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class BrregAPIError(Exception):
@@ -15,10 +15,11 @@ class BrregAPIError(Exception):
     def __init__(
         self,
         message: str,
-        status_code: Optional[int] = None,
-        response_text: Optional[str] = None,
-        request_url: Optional[str] = None,
-        request_params: Optional[Dict[str, Any]] = None,
+        status_code: int | None = None,
+        response_text: str | None = None,
+        request_url: str | None = None,
+        request_params: dict[str, Any] | None = None,
+        retry_after: float | None = None,
     ):
         """
         Initialize a new Brreg API error.
@@ -29,21 +30,24 @@ class BrregAPIError(Exception):
             response_text: Raw response text from the API, if available.
             request_url: The URL that was requested when the error occurred.
             request_params: The parameters that were sent with the request.
+            retry_after: Seconds the server asked us to wait before retrying
+                (from the Retry-After header), if provided.
         """
         self.status_code = status_code
         self.response_text = response_text
         self.request_url = request_url
-        self.request_params = request_params
+        self.request_params = dict(request_params) if request_params else None
+        self.retry_after = retry_after
         super().__init__(message)
 
     @property
-    def response_json(self) -> Optional[Dict[str, Any]]:
+    def response_json(self) -> Any:
         """
         Try to parse the response text as JSON and return it as a dictionary.
 
         Returns:
-            The parsed JSON response as a dictionary, or None if parsing fails
-            or if no response text is available.
+            The parsed JSON response, or None if parsing fails or if no
+            response text is available.
         """
         if not self.response_text:
             return None
@@ -90,6 +94,19 @@ class BrregResourceNotFoundError(BrregAPIError):
     pass
 
 
+class BrregGoneError(BrregResourceNotFoundError):
+    """
+    Raised when a resource has been permanently removed.
+
+    This exception is raised when the API returns a 410 Gone status code,
+    which Brreg uses for entities that have been removed from the register.
+    It subclasses BrregResourceNotFoundError, so existing "not found"
+    handling also covers it.
+    """
+
+    pass
+
+
 class BrregServerError(BrregAPIError):
     """
     Raised when server error occurs (5xx status codes).
@@ -104,11 +121,11 @@ class BrregServerError(BrregAPIError):
 
 class BrregClientError(BrregAPIError):
     """
-    Raised for client errors (4xx status codes, excluding 404 and 429).
+    Raised for client errors (4xx status codes without a more specific exception).
 
     This exception is typically raised when the API returns a 4xx status code
-    other than 404 (Not Found) or 429 (Too Many Requests), indicating an error
-    with the client request.
+    that has no dedicated subclass (400, 401, 403, 404, 410 and 429 do),
+    indicating an error with the client request.
     """
 
     pass

@@ -9,7 +9,9 @@ from brreg_wrapper.client import BrregClient
 from brreg_wrapper.exceptions import (
     BrregAPIError,
     BrregAuthenticationError,
+    BrregDataError,
     BrregForbiddenError,
+    BrregGoneError,
     BrregRateLimitError,
     BrregResourceNotFoundError,
     BrregServerError,
@@ -26,6 +28,34 @@ from brreg_wrapper.models import (
     SlettetEnhet,
     Underenhet,
 )
+
+
+def enhet_payload(org_nr: str, navn: str = "Test AS", **overrides) -> dict:
+    """A minimal Enhet payload containing every field the model requires."""
+    payload = {
+        "organisasjonsnummer": org_nr,
+        "navn": navn,
+        "organisasjonsform": {
+            "kode": "AS",
+            "beskrivelse": "Aksjeselskap",
+            "_links": {
+                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
+            },
+        },
+        "registrertIMvaregisteret": True,
+        "maalform": "Bokmål",
+        "registrertIForetaksregisteret": True,
+        "registrertIStiftelsesregisteret": False,
+        "registrertIFrivillighetsregisteret": False,
+        "konkurs": False,
+        "underAvvikling": False,
+        "underTvangsavviklingEllerTvangsopplosning": False,
+        "registreringsdatoEnhetsregisteret": "2023-01-01",
+        "harRegistrertAntallAnsatte": False,
+        "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr}"}},
+    }
+    payload.update(overrides)
+    return payload
 
 
 @pytest.mark.asyncio
@@ -105,7 +135,7 @@ async def test_get_enhet_success(httpx_mock: HTTPXMock):
 @pytest.mark.asyncio
 async def test_get_organisasjonsformer_url(httpx_mock: HTTPXMock):
     """Test that get_organisasjonsformer calls the correct URL."""
-    expected_url = f"{BrregClient.BASE_URL}/kodeverk/organisasjonsformer"
+    expected_url = f"{BrregClient.BASE_URL}/organisasjonsformer"
     # Mock response data structure matching Organisasjonsformer1
     mock_response_data = {
         "_embedded": {
@@ -115,9 +145,7 @@ async def test_get_organisasjonsformer_url(httpx_mock: HTTPXMock):
                     "beskrivelse": "Aksjeselskap",
                     "_links": {
                         "self": {
-                            "href": (
-                                f"{BrregClient.BASE_URL}/kodeverk/organisasjonsformer/AS"
-                            )
+                            "href": (f"{BrregClient.BASE_URL}/organisasjonsformer/AS")
                         }
                     },
                 }
@@ -145,106 +173,20 @@ async def test_get_organisasjonsformer_url(httpx_mock: HTTPXMock):
 
 
 @pytest.mark.asyncio
-async def test_get_naeringskoder_url(httpx_mock: HTTPXMock):
-    """Test that get_naeringskoder calls the correct URL."""
-    expected_url = f"{BrregClient.BASE_URL}/kodeverk/naeringskoder"
-    # Mock response data (simple dict is fine as return type is dict)
-    mock_response_data = {
-        "_embedded": {
-            "naeringskoder": [
-                {
-                    "kode": "01.110",
-                    "beskrivelse": "Dyrking av korn...",
-                    "_links": {
-                        "self": {
-                            "href": (
-                                f"{BrregClient.BASE_URL}/kodeverk/naeringskoder/01.110"
-                            )
-                        }
-                    },
-                }
-            ]
-        },
-        "_links": {"self": {"href": expected_url}},
-    }
-
-    httpx_mock.add_response(
-        url=expected_url,
-        method="GET",
-        json=mock_response_data,
-        status_code=200,
-        headers={"Content-Type": "application/json"},
-    )
-
-    async with BrregClient() as client:
-        await client.get_naeringskoder()  # Call the method
-
-        # Verify the request URL
-        request = httpx_mock.get_request()
-        assert request is not None
-        assert request.method == "GET"
-        assert str(request.url) == expected_url
-
-
-@pytest.mark.asyncio
-async def test_get_sektorkoder_url(httpx_mock: HTTPXMock):
-    """Test that get_sektorkoder calls the correct URL."""
-    expected_url = f"{BrregClient.BASE_URL}/kodeverk/sektorkoder"
-    # Mock response data (simple dict is fine as return type is dict)
-    mock_response_data = {
-        "_embedded": {
-            "sektorkoder": [
-                {
-                    "kode": "6100",
-                    "beskrivelse": "Statsforvaltningen",
-                    "_links": {
-                        "self": {
-                            "href": f"{BrregClient.BASE_URL}/kodeverk/sektorkoder/6100"
-                        }
-                    },
-                }
-            ]
-        },
-        "_links": {"self": {"href": expected_url}},
-    }
-
-    httpx_mock.add_response(
-        url=expected_url,
-        method="GET",
-        json=mock_response_data,
-        status_code=200,
-        headers={"Content-Type": "application/json"},
-    )
-
-    async with BrregClient() as client:
-        await client.get_sektorkoder()  # Call the method
-
-        # Verify the request URL
-        request = httpx_mock.get_request()
-        assert request is not None
-        assert request.method == "GET"
-        assert str(request.url) == expected_url
-
-
-@pytest.mark.asyncio
 async def test_get_kommuner_success(httpx_mock: HTTPXMock):
     """Test successfully retrieving municipalities."""
-    expected_url = f"{BrregClient.BASE_URL}/kodeverk/kommuner"
+    expected_url = f"{BrregClient.BASE_URL}/kommuner"
     # Mock response data - API returns a list, client wraps it
     mock_api_response_list = [
         {
             "nummer": "0301",
             "navn": "OSLO",
-            "_links": {
-                "self": {"href": f"{BrregClient.BASE_URL}/kodeverk/kommuner/0301"}
-            },
+            "_links": {"self": {"href": f"{BrregClient.BASE_URL}/kommuner/0301"}},
         },
         {
             "nummer": "1101",
             "navn": "EIGERØY",  # Example, might not be real
-            "_links": {
-                "self": {"href": f"{BrregClient.BASE_URL}/kodeverk/kommuner/1101"}
-            },
+            "_links": {"self": {"href": f"{BrregClient.BASE_URL}/kommuner/1101"}},
         },
     ]
     # The client wraps this list into the structure expected by Kommuner1 model
@@ -509,19 +451,7 @@ async def test_search_enheter_success(httpx_mock: HTTPXMock):
 async def test_caching(httpx_mock: HTTPXMock):
     """Test that responses are cached properly."""
     org_nr = "123456789"
-    mock_response_data = {
-        "organisasjonsnummer": org_nr,
-        "navn": "Cache Test AS",
-        "organisasjonsform": {
-            "kode": "AS",
-            "beskrivelse": "Aksjeselskap",
-            "_links": {
-                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
-            },
-        },
-        "registreringsdatoEnhetsregisteret": "2023-01-01",
-        "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr}"}},
-    }
+    mock_response_data = enhet_payload(org_nr, navn="Cache Test AS")
     expected_url = f"{BrregClient.BASE_URL}/enheter/{org_nr}"
 
     # Add the mock response - it will only be used once
@@ -550,45 +480,49 @@ async def test_caching(httpx_mock: HTTPXMock):
         assert "enhet" in str(cache_info["categories"])
 
         # Clear the cache
-        client.clear_cache()
+        assert client.clear_cache() == 1
         assert client.get_cache_info()["count"] == 0
     finally:
         await client.close()
 
 
 @pytest.mark.asyncio
-async def test_rate_limiting():
-    """Test that rate limiting works correctly."""
-    # Create a client with rate limiting of 0.2 seconds
-    client = BrregClient(rate_limit=0.2)
-    try:
-        # Record timing for two API calls that would hit rate limits
-        # We'll mock the _request method to avoid actual API calls
+async def test_rate_limiting(httpx_mock: HTTPXMock):
+    """Consecutive requests are spaced by at least ``rate_limit`` seconds."""
+    request_times = []
 
-        original_request = client._request
-        request_times = []
+    def record(request: httpx.Request) -> httpx.Response:
+        request_times.append(time.monotonic())
+        return httpx.Response(200, json={})
 
-        # Replace _request with a mock that just records times
-        async def mock_request(*args, **kwargs):
-            request_times.append(time.time())
-            return httpx.Response(200, json={})
+    httpx_mock.add_callback(record, url=f"{BrregClient.BASE_URL}/", is_reusable=True)
 
-        client._request = mock_request
-
-        # Make two quick requests
+    async with BrregClient(rate_limit=0.2) as client:
         await client.get_services()
         await client.get_services()
 
-        # Restore original method
-        client._request = original_request
+    assert request_times[1] - request_times[0] >= 0.2
 
-        # Calculate time difference
-        time_diff = request_times[1] - request_times[0]
 
-        # Assert that the second request was delayed by at least the rate limit
-        assert time_diff >= 0.2
-    finally:
-        await client.close()
+@pytest.mark.asyncio
+async def test_rate_limiting_applies_to_concurrent_requests(httpx_mock: HTTPXMock):
+    """Concurrent batch requests must not all fire after the same delay."""
+    request_times = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        request_times.append(time.monotonic())
+        org_nr = request.url.path.rsplit("/", 1)[-1]
+        return httpx.Response(200, json=enhet_payload(org_nr))
+
+    httpx_mock.add_callback(record, is_reusable=True)
+
+    org_nrs = ["111111111", "222222222", "333333333"]
+    async with BrregClient(rate_limit=0.1) as client:
+        await client.get_multiple_enheter(org_nrs)
+
+    request_times.sort()
+    gaps = [b - a for a, b in zip(request_times, request_times[1:], strict=False)]
+    assert all(gap >= 0.09 for gap in gaps), gaps
 
 
 @pytest.mark.asyncio
@@ -598,33 +532,8 @@ async def test_get_multiple_enheter(httpx_mock: HTTPXMock):
     org_nr1 = "123456789"
     org_nr2 = "987654321"
 
-    mock_response1 = {
-        "organisasjonsnummer": org_nr1,
-        "navn": "Batch Test 1 AS",
-        "organisasjonsform": {
-            "kode": "AS",
-            "beskrivelse": "Aksjeselskap",
-            "_links": {
-                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
-            },
-        },
-        "registreringsdatoEnhetsregisteret": "2023-01-01",
-        "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr1}"}},
-    }
-
-    mock_response2 = {
-        "organisasjonsnummer": org_nr2,
-        "navn": "Batch Test 2 AS",
-        "organisasjonsform": {
-            "kode": "AS",
-            "beskrivelse": "Aksjeselskap",
-            "_links": {
-                "self": {"href": f"{BrregClient.BASE_URL}/organisasjonsformer/AS"}
-            },
-        },
-        "registreringsdatoEnhetsregisteret": "2023-02-01",
-        "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter/{org_nr2}"}},
-    }
+    mock_response1 = enhet_payload(org_nr1, navn="Batch Test 1 AS")
+    mock_response2 = enhet_payload(org_nr2, navn="Batch Test 2 AS")
 
     # Add mock responses
     httpx_mock.add_response(
@@ -666,6 +575,7 @@ async def test_error_handling(httpx_mock: HTTPXMock):
         (401, BrregAuthenticationError, "Authentication required"),
         (403, BrregForbiddenError, "Access forbidden"),
         (404, BrregResourceNotFoundError, "Resource not found"),
+        (410, BrregGoneError, "Resource has been removed"),
         (429, BrregRateLimitError, "Rate limit exceeded"),
         (500, BrregServerError, "HTTP error 500"),
         (503, BrregServiceUnavailableError, "Service temporarily unavailable"),
@@ -673,7 +583,7 @@ async def test_error_handling(httpx_mock: HTTPXMock):
 
     for status_code, exception_class, error_pattern in error_mappings:
         # Reset mock for each iteration
-        httpx_mock.reset(assert_all_responses_were_requested=False)
+        httpx_mock.reset()
 
         # Setup mock response for this status code
         httpx_mock.add_response(
@@ -683,8 +593,8 @@ async def test_error_handling(httpx_mock: HTTPXMock):
             status_code=status_code,
         )
 
-        # Test with fresh client each time
-        client = BrregClient()
+        # Test with fresh client each time; retries would only slow this down
+        client = BrregClient(max_retries=0)
         try:
             with pytest.raises(exception_class) as excinfo:
                 await client.get_enhet(org_nr)
@@ -769,3 +679,307 @@ async def test_get_underenhet_with_historiske_navn(httpx_mock: HTTPXMock):
         assert underenhet.historiskeNavn[0].navn == "TOTEN BYGG OG ANLEGG AS"
     finally:
         await client.close()
+
+
+# --- Regression tests for robustness fixes ---
+
+EMPTY_SEARCH_PAGE = {
+    "_links": {"self": {"href": f"{BrregClient.BASE_URL}/enheter"}},
+    "page": {"number": 0, "size": 20, "totalElements": 0, "totalPages": 0},
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("download_enheter_json", "/enheter/lastned"),
+        ("download_enheter_csv", "/enheter/lastned/csv"),
+        ("download_enheter_spreadsheet", "/enheter/lastned/regneark"),
+        ("download_underenheter_json", "/underenheter/lastned"),
+        ("download_underenheter_csv", "/underenheter/lastned/csv"),
+        ("download_underenheter_spreadsheet", "/underenheter/lastned/regneark"),
+        ("download_roller_totalbestand", "/roller/totalbestand"),
+    ],
+)
+async def test_download_methods_return_bytes(
+    httpx_mock: HTTPXMock, method: str, path: str
+):
+    """Downloads send a wildcard Accept header (the API rejects specific ones)."""
+    httpx_mock.add_response(url=f"{BrregClient.BASE_URL}{path}", content=b"\x1f\x8b")
+
+    async with BrregClient() as client:
+        content = await getattr(client, method)()
+
+    assert content == b"\x1f\x8b"
+    assert httpx_mock.get_request().headers["Accept"] == "*/*"
+
+
+@pytest.mark.asyncio
+async def test_download_passes_filter_params(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=httpx.URL(
+            f"{BrregClient.BASE_URL}/enheter/lastned", params={"kommunenummer": "0301"}
+        ),
+        content=b"data",
+    )
+
+    async with BrregClient() as client:
+        assert await client.download_enheter_json(kommunenummer="0301") == b"data"
+
+
+@pytest.mark.asyncio
+async def test_search_cache_keys_include_all_params(httpx_mock: HTTPXMock):
+    """Searches differing only in an uncommon param must not share a cache entry."""
+    httpx_mock.add_response(json=EMPTY_SEARCH_PAGE, is_reusable=True)
+
+    async with BrregClient(cache_ttl=timedelta(minutes=5)) as client:
+        await client.search_enheter(navn="test", konkurs="true")
+        await client.search_enheter(navn="test", konkurs="false")
+        await client.search_enheter(navn="test", konkurs="true")  # cache hit
+
+    params = [dict(r.url.params) for r in httpx_mock.get_requests()]
+    assert params == [
+        {"navn": "test", "konkurs": "true"},
+        {"navn": "test", "konkurs": "false"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_clear_cache_by_pattern(httpx_mock: HTTPXMock):
+    for org_nr in ("111111111", "222222222"):
+        httpx_mock.add_response(
+            url=f"{BrregClient.BASE_URL}/enheter/{org_nr}", json=enhet_payload(org_nr)
+        )
+
+    async with BrregClient(cache_ttl=timedelta(minutes=5)) as client:
+        await client.get_enhet("111111111")
+        await client.get_enhet("222222222")
+        assert client.clear_cache(pattern="111111111") == 1
+        assert client.get_cache_info()["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cache_is_bounded(httpx_mock: HTTPXMock):
+    httpx_mock.add_callback(
+        lambda r: httpx.Response(
+            200, json=enhet_payload(r.url.path.rsplit("/", 1)[-1])
+        ),
+        is_reusable=True,
+    )
+
+    async with BrregClient(cache_ttl=timedelta(minutes=5), cache_maxsize=2) as c:
+        for org_nr in ("111111111", "222222222", "333333333"):
+            await c.get_enhet(org_nr)
+        assert c.get_cache_info()["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_search_organizations_uses_valid_param_names(httpx_mock: HTTPXMock):
+    """``organisasjonsform.kode`` makes the live API return HTTP 500."""
+    httpx_mock.add_response(json=EMPTY_SEARCH_PAGE)
+
+    async with BrregClient() as client:
+        await client.search_organizations(
+            query="equinor", organization_form="ASA", municipality="0301"
+        )
+
+    assert dict(httpx_mock.get_request().url.params) == {
+        "navn": "equinor",
+        "organisasjonsform": "ASA",
+        "kommunenummer": "0301",
+        "page": "0",
+        "size": "20",
+    }
+
+
+def _no_backoff(client: BrregClient) -> None:
+    client._retry_wait = lambda retry_state: 0
+
+
+@pytest.mark.asyncio
+async def test_transient_errors_are_retried(httpx_mock: HTTPXMock):
+    url = f"{BrregClient.BASE_URL}/enheter/123456789"
+    httpx_mock.add_response(url=url, status_code=503)
+    httpx_mock.add_response(url=url, status_code=429)
+    httpx_mock.add_response(url=url, json=enhet_payload("123456789"))
+
+    async with BrregClient(max_retries=2) as client:
+        _no_backoff(client)
+        enhet = await client.get_enhet("123456789")
+
+    assert enhet.organisasjonsnummer == "123456789"
+    assert len(httpx_mock.get_requests()) == 3
+
+
+@pytest.mark.asyncio
+async def test_max_retries_counts_retries_not_attempts(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(status_code=500, is_reusable=True)
+
+    async with BrregClient(max_retries=2) as client:
+        _no_backoff(client)
+        with pytest.raises(BrregServerError):
+            await client.get_enhet("123456789")
+
+    assert len(httpx_mock.get_requests()) == 3
+
+
+@pytest.mark.asyncio
+async def test_client_errors_are_not_retried(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(status_code=404)
+
+    async with BrregClient(max_retries=3) as client:
+        with pytest.raises(BrregResourceNotFoundError):
+            await client.get_enhet("123456789")
+
+    assert len(httpx_mock.get_requests()) == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_after_header_is_exposed(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(status_code=429, headers={"Retry-After": "7"})
+
+    async with BrregClient(max_retries=0) as client:
+        with pytest.raises(BrregRateLimitError) as exc_info:
+            await client.get_enhet("123456789")
+
+    assert exc_info.value.retry_after == 7.0
+
+
+@pytest.mark.asyncio
+async def test_error_includes_request_params(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(status_code=400)
+
+    async with BrregClient() as client:
+        with pytest.raises(BrregValidationError) as exc_info:
+            await client.search_enheter(navn="x", size=99999)
+
+    assert exc_info.value.request_params == {"navn": "x", "size": "99999"}
+
+
+@pytest.mark.asyncio
+async def test_network_errors_are_wrapped_and_chained(httpx_mock: HTTPXMock):
+    httpx_mock.add_exception(httpx.ConnectError("boom"))
+
+    async with BrregClient(max_retries=0) as client:
+        with pytest.raises(BrregAPIError) as exc_info:
+            await client.get_enhet("123456789")
+
+    assert isinstance(exc_info.value.__cause__, httpx.ConnectError)
+    assert exc_info.value.request_url.endswith("/enheter/123456789")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", ["12345678", "1234567890", "12345678a", "123/roller"])
+async def test_invalid_orgnr_is_rejected_locally(bad: str):
+    async with BrregClient() as client:
+        with pytest.raises(BrregValidationError):
+            await client.get_enhet(bad)
+
+
+@pytest.mark.asyncio
+async def test_orgnr_whitespace_is_normalized(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BrregClient.BASE_URL}/enheter/923609016",
+        json=enhet_payload("923609016"),
+    )
+
+    async with BrregClient() as client:
+        enhet = await client.get_enhet("923 609 016")
+
+    assert enhet.organisasjonsnummer == "923609016"
+
+
+@pytest.mark.asyncio
+async def test_unknown_response_fields_are_tolerated(httpx_mock: HTTPXMock):
+    """New fields added by Brreg must not break parsing."""
+    httpx_mock.add_response(
+        json=enhet_payload("123456789", nyttFeltFraBrreg={"verdi": 1})
+    )
+
+    async with BrregClient() as client:
+        enhet = await client.get_enhet("123456789")
+
+    assert enhet.model_extra == {"nyttFeltFraBrreg": {"verdi": 1}}
+
+
+@pytest.mark.asyncio
+async def test_unparseable_response_raises_data_error(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(json={"organisasjonsnummer": "123456789"})
+
+    async with BrregClient() as client:
+        with pytest.raises(BrregDataError):
+            await client.get_enhet("123456789")
+
+
+@pytest.mark.asyncio
+async def test_invalid_json_raises_data_error(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(content=b"<html>maintenance</html>")
+
+    async with BrregClient() as client:
+        with pytest.raises(BrregDataError):
+            await client.get_enhet("123456789")
+
+
+@pytest.mark.asyncio
+async def test_batch_collects_errors_and_dedupes(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BrregClient.BASE_URL}/enheter/111111111",
+        json=enhet_payload("111111111"),
+    )
+    httpx_mock.add_response(
+        url=f"{BrregClient.BASE_URL}/enheter/222222222", status_code=404
+    )
+
+    async with BrregClient() as client:
+        results = await client.get_multiple_enheter(
+            ["111111111", "222222222", "111111111", "bad"]
+        )
+
+    assert list(results) == ["111111111", "222222222", "bad"]
+    assert isinstance(results["111111111"], Enhet)
+    assert isinstance(results["222222222"], BrregResourceNotFoundError)
+    assert isinstance(results["bad"], BrregValidationError)
+    assert len(httpx_mock.get_requests()) == 2
+
+
+@pytest.mark.asyncio
+async def test_external_client_is_not_closed_and_needs_no_base_url(
+    httpx_mock: HTTPXMock,
+):
+    httpx_mock.add_response(
+        url=f"{BrregClient.BASE_URL}/enheter/123456789",
+        json=enhet_payload("123456789"),
+    )
+
+    async with httpx.AsyncClient() as http:
+        async with BrregClient(client=http) as client:
+            await client.get_enhet("123456789")
+        assert not http.is_closed
+
+
+@pytest.mark.asyncio
+async def test_oppdateringer_are_never_cached(httpx_mock: HTTPXMock):
+    """Polling a change feed must always hit the API, even with caching on."""
+    httpx_mock.add_response(json=[], is_reusable=True)
+
+    async with BrregClient(cache_ttl=timedelta(minutes=5)) as client:
+        await client.get_rolle_oppdateringer(afterId=1)
+        await client.get_rolle_oppdateringer(afterId=1)
+        assert client.get_cache_info()["count"] == 0
+
+    assert len(httpx_mock.get_requests()) == 2
+
+
+@pytest.mark.asyncio
+async def test_clear_cache_warns_when_pattern_matches_nothing(
+    httpx_mock: HTTPXMock, caplog: pytest.LogCaptureFixture
+):
+    httpx_mock.add_response(json=enhet_payload("111111111"))
+
+    async with BrregClient(cache_ttl=timedelta(minutes=5)) as client:
+        await client.get_enhet("111111111")
+        with caplog.at_level("WARNING", logger="brreg_wrapper.client"):
+            assert client.clear_cache(pattern="enhet_") == 0
+
+    assert any("matched no cache entries" in r.message for r in caplog.records)

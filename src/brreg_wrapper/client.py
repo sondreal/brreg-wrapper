@@ -1,15 +1,23 @@
 import asyncio
+import copy
 import logging
+import re
 import time
+from collections import OrderedDict
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from email.utils import parsedate_to_datetime
+from typing import Any, TypeVar
+from urllib.parse import quote, urlencode
 
 import httpx
+from pydantic import BaseModel, ValidationError
 from tenacity import (
-    retry,
+    AsyncRetrying,
+    RetryCallState,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_exponential_jitter,
 )
 
 from .exceptions import (
@@ -17,7 +25,9 @@ from .exceptions import (
     BrregAuthenticationError,
     BrregClientError,
     BrregConnectionError,
+    BrregDataError,
     BrregForbiddenError,
+    BrregGoneError,
     BrregRateLimitError,
     BrregResourceNotFoundError,
     BrregServerError,
@@ -48,6 +58,96 @@ from .models import (
     Underenheter1,
 )
 
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
+_ORGNR_PATTERN = re.compile(r"^\d{9}$")
+
+# Status codes with a dedicated exception type. Anything else falls back to
+# BrregClientError / BrregServerError / BrregAPIError based on its range.
+_STATUS_ERRORS: dict[int, tuple[type[BrregAPIError], str]] = {
+    400: (BrregValidationError, "Invalid request parameters: {url}"),
+    401: (BrregAuthenticationError, "Authentication required or invalid credentials"),
+    403: (
+        BrregForbiddenError,
+        "Access forbidden. You don't have permission to access this resource.",
+    ),
+    404: (BrregResourceNotFoundError, "Resource not found: {url}"),
+    410: (BrregGoneError, "Resource has been removed: {url}"),
+    429: (BrregRateLimitError, "Rate limit exceeded. Please slow down your requests."),
+    503: (
+        BrregServiceUnavailableError,
+        "Service temporarily unavailable. Please try again later.",
+    ),
+}
+
+# Transient failures that are worth another attempt. All endpoints are GETs,
+# so retrying is always safe.
+_RETRYABLE_ERRORS = (
+    BrregServerError,
+    BrregRateLimitError,
+    BrregConnectionError,
+    BrregTimeoutError,
+)
+
+# Upper bound for honouring a server-provided Retry-After header, so a
+# misbehaving server can't stall the caller indefinitely.
+_MAX_RETRY_AFTER_SECONDS = 60.0
+
+# Download endpoints reject specific Accept values (400/401/406) and only
+# answer to a wildcard.
+_DOWNLOAD_ACCEPT = "*/*"
+
+# Change feeds are polled for fresh data, so caching them would hide updates.
+_UNCACHED_PREFIXES = ("/oppdateringer/",)
+
+_DEFAULT_CACHE_MAXSIZE = 1024
+_DEFAULT_MAX_CONCURRENCY = 10
+
+
+def _normalize_orgnr(organisasjonsnummer: str) -> str:
+    """Strip whitespace and validate a 9-digit organization number.
+
+    Validating locally avoids a pointless round-trip and prevents values like
+    ``"123/roller"`` from silently hitting a different endpoint.
+    """
+    normalized = re.sub(r"\s+", "", str(organisasjonsnummer))
+    if not _ORGNR_PATTERN.fullmatch(normalized):
+        raise BrregValidationError(
+            f"Invalid organisasjonsnummer {organisasjonsnummer!r}: "
+            "expected exactly 9 digits"
+        )
+    return normalized
+
+
+def _path_segment(value: str) -> str:
+    """Percent-encode a value for safe use as a single URL path segment."""
+    return quote(str(value), safe="")
+
+
+def _drop_none(params: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in params.items() if v is not None}
+
+
+def _is_deleted(data: Any) -> bool:
+    """Deleted (sub)entities are returned with a ``slettedato`` field."""
+    return isinstance(data, dict) and "slettedato" in data
+
+
+def _parse_retry_after(response: httpx.Response) -> float | None:
+    """Return the Retry-After delay in seconds, if the header is present."""
+    value = response.headers.get("Retry-After")
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        seconds = (retry_at - datetime.now(retry_at.tzinfo)).total_seconds()
+    return max(0.0, min(seconds, _MAX_RETRY_AFTER_SECONDS))
+
 
 class BrregClient:
     """
@@ -62,47 +162,99 @@ class BrregClient:
         self,
         timeout: float = 10.0,
         client: httpx.AsyncClient | None = None,
-        rate_limit: Optional[float] = None,
-        cache_ttl: Optional[timedelta] = None,
-        logger: Optional[logging.Logger] = None,
+        rate_limit: float | None = None,
+        cache_ttl: timedelta | None = None,
+        logger: logging.Logger | None = None,
         max_retries: int = 3,
+        cache_maxsize: int = _DEFAULT_CACHE_MAXSIZE,
     ):
         """
         Initializes the BrregClient.
 
         Args:
             timeout: The timeout for HTTP requests in seconds. Defaults to 10.0.
-            client: An optional httpx.AsyncClient instance. If not provided,
-                    a new one is created.
-            rate_limit: Optional rate limit in seconds between API calls.
-            cache_ttl: Optional time-to-live for cached responses.
-                       Defaults to 1 hour if caching is enabled.
-            logger: Optional logger instance. If not provided, a default one is created.
-            max_retries: Maximum number of retries for failed requests. Defaults to 3.
+                     Ignored when ``client`` is provided.
+            client: An optional httpx.AsyncClient instance. If provided, the caller
+                    owns it and is responsible for closing it; ``close()`` will
+                    leave it open.
+            rate_limit: Optional minimum number of seconds between API calls.
+                        Enforced across concurrent requests.
+            cache_ttl: Optional time-to-live for cached GET responses. Caching is
+                       disabled unless this is set. The /oppdateringer change
+                       feeds are never cached.
+            logger: Optional logger instance. If not provided, a default one is
+                    created.
+            max_retries: Maximum number of retries for transient failures
+                         (5xx, 429, timeouts, connection errors). Defaults to 3,
+                         i.e. up to 4 attempts in total. Set to 0 to disable.
+            cache_maxsize: Maximum number of cached responses. The least recently
+                           used entries are evicted first. Defaults to 1024.
         """
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        if cache_maxsize < 1:
+            raise ValueError("cache_maxsize must be >= 1")
+
+        self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             base_url=self.BASE_URL, timeout=timeout
         )
+        # A caller-supplied client may not have a base_url; fall back to
+        # absolute URLs so every endpoint still resolves correctly.
+        self._url_prefix = "" if str(self._client.base_url) else self.BASE_URL
+
         self._rate_limit = rate_limit
-        self._last_request_time = 0
+        self._rate_limit_lock = asyncio.Lock()
+        self._last_request_time: float | None = None
+
         self._cache_enabled = cache_ttl is not None
         self._cache_ttl = cache_ttl or timedelta(hours=1)
-        self._cache = {}
+        self._cache_maxsize = cache_maxsize
+        # key -> (json payload, monotonic timestamp, wall-clock timestamp)
+        self._cache: OrderedDict[str, tuple[Any, float, datetime]] = OrderedDict()
+
         self._logger = logger or logging.getLogger(__name__)
         self._max_retries = max_retries
 
-    async def _handle_rate_limit(self):
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Lifecycle
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    async def __aenter__(self):
+        """Enter the async context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the async context manager and close the client."""
+        await self.close()
+
+    async def close(self):
+        """Closes the underlying httpx client if this instance created it."""
+        if self._owns_client:
+            await self._client.aclose()
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Transport
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    async def _handle_rate_limit(self) -> None:
+        """Waits until the next request is allowed under ``rate_limit``.
+
+        The lock serializes concurrent callers so that batch methods respect
+        the configured spacing instead of all firing after the same delay.
         """
-        Handles rate limiting by sleeping if necessary.
-        """
-        if self._rate_limit:
-            current_time = time.time()
-            time_since_last = current_time - self._last_request_time
-            if time_since_last < self._rate_limit:
-                delay = self._rate_limit - time_since_last
-                self._logger.debug(f"Rate limiting: sleeping for {delay:.2f} seconds")
-                await asyncio.sleep(delay)
-            self._last_request_time = time.time()
+        if not self._rate_limit:
+            return
+        async with self._rate_limit_lock:
+            if self._last_request_time is not None:
+                elapsed = time.monotonic() - self._last_request_time
+                delay = self._rate_limit - elapsed
+                if delay > 0:
+                    self._logger.debug(
+                        "Rate limiting: sleeping for %.2f seconds", delay
+                    )
+                    await asyncio.sleep(delay)
+            self._last_request_time = time.monotonic()
 
     def _map_http_error(self, exc: httpx.HTTPStatusError) -> BrregAPIError:
         """
@@ -115,287 +267,235 @@ class BrregClient:
             An appropriate BrregAPIError subclass.
         """
         status_code = exc.response.status_code
-        message = f"HTTP error {status_code} while accessing {exc.request.url}"
-        response_text = exc.response.text
-        request_url = str(exc.request.url)
-        request_params = getattr(exc.request, "params", None)
+        url = exc.request.url
 
-        if status_code == 404:
-            return BrregResourceNotFoundError(
-                message=f"Resource not found: {exc.request.url}",
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif status_code == 429:
-            return BrregRateLimitError(
-                message="Rate limit exceeded. Please slow down your requests.",
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif status_code == 400:
-            return BrregValidationError(
-                message=f"Invalid request parameters: {exc.request.url}",
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif status_code == 401:
-            return BrregAuthenticationError(
-                message="Authentication required or invalid credentials",
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif status_code == 403:
-            return BrregForbiddenError(
-                message=(
-                    "Access forbidden. You don't have permission "
-                    "to access this resource."
-                ),
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif status_code == 503:
-            return BrregServiceUnavailableError(
-                message="Service temporarily unavailable. Please try again later.",
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif 400 <= status_code < 500:
-            return BrregClientError(
-                message=message,
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
-        elif 500 <= status_code < 600:
-            return BrregServerError(
-                message=message,
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
+        if status_code in _STATUS_ERRORS:
+            error_cls, template = _STATUS_ERRORS[status_code]
+            message = template.format(url=url)
         else:
-            return BrregAPIError(
-                message=message,
-                status_code=status_code,
-                response_text=response_text,
-                request_url=request_url,
-                request_params=request_params,
-            )
+            if 400 <= status_code < 500:
+                error_cls = BrregClientError
+            elif 500 <= status_code < 600:
+                error_cls = BrregServerError
+            else:
+                error_cls = BrregAPIError
+            message = f"HTTP error {status_code} while accessing {url}"
 
-    def _log_mapped_http_error(self, exc: httpx.HTTPStatusError) -> None:
-        """Log a mapped HTTP error at a level matching its severity.
+        return error_cls(
+            message=message,
+            status_code=status_code,
+            response_text=exc.response.text,
+            request_url=str(url),
+            request_params=dict(url.params),
+            retry_after=_parse_retry_after(exc.response),
+        )
+
+    def _log_error(self, error: BrregAPIError) -> None:
+        """Log a final (post-retry) error at a level matching its severity.
 
         404 is an expected miss (callers often try enhet, then underenhet),
-        so it is logged at DEBUG without exception info. Other HTTP errors
-        stay at ERROR with traceback.
+        so it is logged at DEBUG without exception info. Other errors stay
+        at ERROR with traceback.
         """
-        message = (
-            f"HTTP error {exc.response.status_code} for {exc.request.url}: "
-            f"{exc.response.text}"
-        )
-        if exc.response.status_code == 404:
+        if error.status_code is not None:
+            message = (
+                f"HTTP error {error.status_code} for {error.request_url}: "
+                f"{error.response_text}"
+            )
+        else:
+            message = str(error)
+
+        if error.status_code == 404:
             self._logger.debug(message)
         else:
-            self._logger.error(message, exc_info=True)
+            self._logger.error(message, exc_info=error)
+
+    async def _send(
+        self,
+        endpoint: str,
+        params: Mapping[str, Any] | None,
+        accept: str,
+    ) -> httpx.Response:
+        """Performs a single GET request, translating failures to Brreg errors."""
+        await self._handle_rate_limit()
+        url = f"{self._url_prefix}{endpoint}"
+        try:
+            response = await self._client.get(
+                url, params=params, headers={"Accept": accept}
+            )
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            raise self._map_http_error(exc) from exc
+        except httpx.TimeoutException as exc:
+            raise BrregTimeoutError(
+                f"Request timed out: {exc}", request_url=url, request_params=params
+            ) from exc
+        except httpx.ConnectError as exc:
+            raise BrregConnectionError(
+                f"Connection error: {exc}", request_url=url, request_params=params
+            ) from exc
+        except httpx.RequestError as exc:
+            raise BrregAPIError(
+                f"Request error: {exc}", request_url=url, request_params=params
+            ) from exc
+
+    def _retry_wait(self, retry_state: RetryCallState) -> float:
+        """Exponential backoff with jitter, deferring to Retry-After if sent."""
+        backoff = wait_exponential_jitter(initial=1, max=10)(retry_state)
+        outcome = retry_state.outcome
+        error = outcome.exception() if outcome else None
+        if isinstance(error, BrregAPIError) and error.retry_after is not None:
+            return max(backoff, error.retry_after)
+        return backoff
+
+    def _log_retry(self, retry_state: RetryCallState) -> None:
+        error = retry_state.outcome.exception() if retry_state.outcome else None
+        delay = retry_state.next_action.sleep if retry_state.next_action else 0
+        self._logger.warning(
+            "Attempt %d failed (%s); retrying in %.1f seconds",
+            retry_state.attempt_number,
+            error,
+            delay,
+        )
 
     async def _request(
         self,
-        method: str,
         endpoint: str,
-        params: dict | None = None,
-        json: dict | None = None,
-        cache_key: str | None = None,
-        retry_enabled: bool = True,
+        params: Mapping[str, Any] | None = None,
+        accept: str = "application/json",
     ) -> httpx.Response:
         """
-        Makes an asynchronous HTTP request to the Brreg API with retry logic,
-        rate limiting, and caching.
+        Makes a GET request to the Brreg API with rate limiting and retries.
 
         Args:
-            method: The HTTP method (e.g., "GET", "POST").
             endpoint: The API endpoint path (e.g., "/enheter").
-            params: Optional query parameters.
-            json: Optional JSON body for POST/PUT requests.
-            cache_key: Optional cache key for caching responses.
-                      If provided, and caching is enabled,
-                      the response will be cached for the configured TTL.
-            retry_enabled: Whether to enable retry logic for this request.
-                          Defaults to True.
+            params: Optional query parameters. ``None`` values are dropped.
+            accept: The Accept header to send.
 
         Returns:
-            The httpx.Response object.
+            The successful httpx.Response.
 
         Raises:
-            BrregAPIError: If the API returns an error or request fails.
+            BrregAPIError: If the API returns an error or the request fails.
         """
-        # Check cache if enabled and it's a GET request
-        if self._cache_enabled and method.upper() == "GET" and cache_key:
-            cached_item = self._cache.get(cache_key)
-            if cached_item:
-                data, timestamp = cached_item
-                if datetime.now() - timestamp < self._cache_ttl:
-                    self._logger.debug(f"Cache hit for {cache_key}")
-                    return data
-                else:
-                    self._logger.debug(f"Cache expired for {cache_key}")
-
-        headers = {"Accept": "application/json"}
-        self._logger.debug(f"Making {method} request to {endpoint}")
-
-        # Define the actual request function
-        async def make_request():
-            await self._handle_rate_limit()
-            try:
-                response = await self._client.request(
-                    method, endpoint, params=params, json=json, headers=headers
-                )
-                response.raise_for_status()
-                return response
-            except httpx.HTTPStatusError as exc:
-                error = self._map_http_error(exc)
-                self._log_mapped_http_error(exc)
-                raise error
-            except httpx.TimeoutException as exc:
-                self._logger.error(f"Request timed out: {exc}", exc_info=True)
-                raise BrregTimeoutError(f"Request timed out: {exc}")
-            except httpx.ConnectError as exc:
-                self._logger.error(f"Connection error: {exc}", exc_info=True)
-                raise BrregConnectionError(f"Connection error: {exc}")
-            except httpx.RequestError as exc:
-                self._logger.error(f"Request error: {exc}", exc_info=True)
-                raise BrregAPIError(f"Request error: {exc}")
-
-        # Execute with retry if enabled
-        if retry_enabled and self._max_retries > 0:
-            # Define retry decorator dynamically to use instance attributes
-            retry_decorator = retry(
-                stop=stop_after_attempt(self._max_retries),
-                wait=wait_exponential(multiplier=1, min=4, max=10),
-                retry=retry_if_exception_type(
-                    (BrregServerError, BrregConnectionError, BrregTimeoutError)
-                ),
+        params = _drop_none(params) if params else None
+        self._logger.debug("Making GET request to %s", endpoint)
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(self._max_retries + 1),
+                wait=self._retry_wait,
+                retry=retry_if_exception_type(_RETRYABLE_ERRORS),
+                before_sleep=self._log_retry,
                 reraise=True,
-            )
+            ):
+                with attempt:
+                    return await self._send(endpoint, params, accept)
+        except BrregAPIError as error:
+            self._log_error(error)
+            raise
+        raise AssertionError("unreachable")  # pragma: no cover
 
-            # Apply retry decorator
-            make_request_with_retry = retry_decorator(make_request)
-            response = await make_request_with_retry()
-        else:
-            response = await make_request()
+    async def _get_json(
+        self, endpoint: str, params: Mapping[str, Any] | None = None
+    ) -> Any:
+        """GETs an endpoint and returns the decoded JSON body, using the cache."""
+        params = _drop_none(params) if params else {}
+        use_cache = not endpoint.startswith(_UNCACHED_PREFIXES)
+        cache_key = self._cache_key(endpoint, params)
 
-        # Cache the response if appropriate
-        if self._cache_enabled and method.upper() == "GET" and cache_key:
-            self._logger.debug(f"Caching response for {cache_key}")
-            self._cache[cache_key] = (response, datetime.now())
+        cached = self._cache_get(cache_key) if use_cache else None
+        if cached is not None:
+            return cached
 
-        return response
+        response = await self._request(endpoint, params)
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise BrregDataError(
+                f"Invalid JSON in response from {response.request.url}",
+                status_code=response.status_code,
+                response_text=response.text,
+                request_url=str(response.request.url),
+                request_params=params or None,
+            ) from exc
 
-    async def _download_request(
+        if use_cache:
+            self._cache_set(cache_key, data)
+        return data
+
+    async def _get_model(
         self,
-        method: str,
+        model: type[ModelT],
         endpoint: str,
-        params: dict | None = None,
-        retry_enabled: bool = True,
+        params: Mapping[str, Any] | None = None,
+    ) -> ModelT:
+        data = await self._get_json(endpoint, params)
+        return self._validate(model, data, endpoint)
+
+    def _validate(self, model: type[ModelT], data: Any, endpoint: str) -> ModelT:
+        """Validates API data into a model, raising BrregDataError on mismatch."""
+        try:
+            return model.model_validate(data)
+        except ValidationError as exc:
+            raise BrregDataError(
+                f"Unexpected response from {endpoint}; could not parse as "
+                f"{model.__name__}: {exc}",
+                request_url=f"{self.BASE_URL}{endpoint}",
+            ) from exc
+
+    async def _download(
+        self, endpoint: str, params: Mapping[str, Any] | None = None
     ) -> bytes:
-        """
-        Makes an asynchronous HTTP request intended for downloading files
-        with retry logic and rate limiting.
-
-        Args:
-            method: The HTTP method (e.g., "GET", "POST").
-            endpoint: The API endpoint path (e.g., "/enheter").
-            params: Optional query parameters.
-            retry_enabled: Whether to enable retry logic for this request.
-                          Defaults to True.
-
-        Returns:
-            The response content as bytes.
-
-        Raises:
-            BrregAPIError: If the API returns an error or request fails.
-        """
-        headers = {"Accept": "*/*"}
-        self._logger.debug(f"Making download request to {endpoint}")
-
-        # Define the actual request function
-        async def make_request():
-            await self._handle_rate_limit()
-            try:
-                # Use stream=True if you anticipate large files and want to
-                # handle streaming
-                response = await self._client.request(
-                    method, endpoint, params=params, headers=headers
-                )
-                response.raise_for_status()
-                return response
-            except httpx.HTTPStatusError as exc:
-                error = self._map_http_error(exc)
-                self._log_mapped_http_error(exc)
-                raise error
-            except httpx.TimeoutException as exc:
-                self._logger.error(f"Request timed out: {exc}", exc_info=True)
-                raise BrregTimeoutError(f"Request timed out: {exc}")
-            except httpx.ConnectError as exc:
-                self._logger.error(f"Connection error: {exc}", exc_info=True)
-                raise BrregConnectionError(f"Connection error: {exc}")
-            except httpx.RequestError as exc:
-                self._logger.error(f"Request error: {exc}", exc_info=True)
-                raise BrregAPIError(f"Request error: {exc}")
-
-        # Execute with retry if enabled
-        if retry_enabled and self._max_retries > 0:
-            # Define retry decorator dynamically to use instance attributes
-            retry_decorator = retry(
-                stop=stop_after_attempt(self._max_retries),
-                wait=wait_exponential(multiplier=1, min=4, max=10),
-                retry=retry_if_exception_type(
-                    (BrregServerError, BrregConnectionError, BrregTimeoutError)
-                ),
-                reraise=True,
-            )
-
-            # Apply retry decorator
-            make_request_with_retry = retry_decorator(make_request)
-            response = await make_request_with_retry()
-        else:
-            response = await make_request()
-
+        """Downloads a bulk file and returns its raw (usually gzipped) bytes."""
+        self._logger.debug("Making download request to %s", endpoint)
+        response = await self._request(endpoint, params, accept=_DOWNLOAD_ACCEPT)
         return response.content
 
-    async def __aenter__(self):
-        """Enter the async context manager."""
-        return self
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Cache
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit the async context manager and close the client."""
-        await self.close()
+    @staticmethod
+    def _cache_key(endpoint: str, params: Mapping[str, Any]) -> str:
+        if not params:
+            return endpoint
+        return f"{endpoint}?{urlencode(sorted(params.items()), doseq=True)}"
 
-    async def close(self):
-        """Closes the underlying httpx client."""
-        await self._client.aclose()
+    def _cache_get(self, key: str) -> Any | None:
+        if not self._cache_enabled:
+            return None
+        entry = self._cache.get(key)
+        if entry is None:
+            return None
+        data, stored_at, _ = entry
+        if time.monotonic() - stored_at >= self._cache_ttl.total_seconds():
+            self._logger.debug("Cache expired for %s", key)
+            del self._cache[key]
+            return None
+        self._logger.debug("Cache hit for %s", key)
+        self._cache.move_to_end(key)
+        return data
+
+    def _cache_set(self, key: str, data: Any) -> None:
+        if not self._cache_enabled:
+            return
+        self._logger.debug("Caching response for %s", key)
+        self._cache[key] = (data, time.monotonic(), datetime.now())
+        self._cache.move_to_end(key)
+        while len(self._cache) > self._cache_maxsize:
+            self._cache.popitem(last=False)
 
     def clear_cache(self, pattern: str | None = None) -> int:
         """
         Clears the cache.
 
+        Cache keys are the request path plus sorted query string, for example
+        ``/enheter/923609016`` or ``/enheter?navn=equinor&page=0``.
+
         Args:
-            pattern: Optional pattern to selectively clear cache entries.
-                    If provided, only cache entries with keys containing this pattern
-                    will be cleared.
+            pattern: Optional substring to selectively clear cache entries.
+                     If provided, only entries whose keys contain it are cleared.
 
         Returns:
             The number of cache entries that were cleared.
@@ -405,53 +505,56 @@ class BrregClient:
             return 0
 
         if pattern is None:
-            # Clear all cache
-            before_count = len(self._cache)
+            removed = len(self._cache)
             self._cache.clear()
-            self._logger.info(f"Cleared entire cache ({before_count} entries)")
-        else:
-            # Clear only entries matching pattern
-            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
-            for k in keys_to_remove:
-                del self._cache[k]
-            self._logger.info(
-                f"Cleared {len(keys_to_remove)} cache entries matching "
-                f"pattern '{pattern}'"
-            )
+            self._logger.info("Cleared entire cache (%d entries)", removed)
+            return removed
 
+        keys_to_remove = [k for k in self._cache if pattern in k]
+        if not keys_to_remove and self._cache:
+            # Most likely a pattern written for the pre-0.3.0 key format
+            # (e.g. "enhet_"), which would otherwise fail silently.
+            self._logger.warning(
+                "Pattern '%s' matched no cache entries; keys look like '%s'",
+                pattern,
+                next(iter(self._cache)),
+            )
+        for k in keys_to_remove:
+            del self._cache[k]
+        self._logger.info(
+            "Cleared %d cache entries matching pattern '%s'",
+            len(keys_to_remove),
+            pattern,
+        )
         return len(keys_to_remove)
 
-    def get_cache_info(self) -> Dict[str, Any]:
+    def get_cache_info(self) -> dict[str, Any]:
         """
         Returns information about the current cache state.
 
         Returns:
-            A dictionary containing cache statistics.
+            A dictionary containing cache statistics. ``categories`` counts
+            entries per top-level resource (e.g. ``enheter``, ``kommuner``).
         """
         if not self._cache_enabled:
             return {"enabled": False, "count": 0, "oldest": None, "newest": None}
 
-        entries = len(self._cache)
-        if entries == 0:
+        if not self._cache:
             return {"enabled": True, "count": 0, "oldest": None, "newest": None}
 
-        # Get cache entry timestamps
-        timestamps = [ts for _, (_, ts) in enumerate(self._cache.values())]
-        oldest = min(timestamps)
-        newest = max(timestamps)
-
-        # Get cache key categories
-        categories = {}
-        for key in self._cache.keys():
-            category = key.split("_")[0] if "_" in key else "other"
+        timestamps = [stored_at for _, _, stored_at in self._cache.values()]
+        categories: dict[str, int] = {}
+        for key in self._cache:
+            category = key.lstrip("/").split("/")[0].split("?")[0] or "other"
             categories[category] = categories.get(category, 0) + 1
 
         return {
             "enabled": True,
-            "count": entries,
-            "oldest": oldest,
-            "newest": newest,
+            "count": len(self._cache),
+            "oldest": min(timestamps),
+            "newest": max(timestamps),
             "ttl_seconds": self._cache_ttl.total_seconds(),
+            "maxsize": self._cache_maxsize,
             "categories": categories,
         }
 
@@ -463,13 +566,50 @@ class BrregClient:
             ttl: The new cache TTL as a timedelta.
         """
         self._cache_ttl = ttl
-        self._logger.info(f"Cache TTL set to {ttl.total_seconds()} seconds")
+        self._logger.info("Cache TTL set to %s seconds", ttl.total_seconds())
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Helpers
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    @staticmethod
+    def _wrap_embedded(data: Any, key: str) -> Any:
+        """Wraps a bare list response into the HAL ``_embedded`` shape."""
+        if isinstance(data, list):
+            return {"_embedded": {key: data}}
+        return data
+
+    async def _gather_by_key(
+        self,
+        keys: Iterable[str],
+        fetch,
+        max_concurrency: int,
+    ) -> dict[str, Any]:
+        """Runs ``fetch(key)`` concurrently, collecting results or API errors.
+
+        Only BrregAPIError is captured per key; anything else (programming
+        errors, cancellation) propagates to the caller.
+        """
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def run(key: str):
+            async with semaphore:
+                try:
+                    return await fetch(key)
+                except BrregAPIError as error:
+                    return error
+
+        unique_keys = list(dict.fromkeys(keys))
+        results = await asyncio.gather(*(run(k) for k in unique_keys))
+        return dict(zip(unique_keys, results, strict=True))
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Generelt Endpoints
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    async def get_services(self) -> Dict[str, Any]:
+    async def get_services(self) -> dict[str, Any]:
         """
         Retrieves the list of available services/endpoints from the root API endpoint.
         Ref: Provided Swagger (GET /enhetsregisteret/api)
@@ -477,9 +617,8 @@ class BrregClient:
         Returns:
             A dictionary representing the available services, likely containing links.
         """
-        endpoint = "/"
-        response = await self._request("GET", endpoint)
-        return response.json()
+        # Copy so callers can't mutate the cached payload.
+        return copy.deepcopy(await self._get_json("/"))
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Enhet Endpoints
@@ -492,166 +631,100 @@ class BrregClient:
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-detalj
 
         Args:
-            organisasjonsnummer: The 9-digit organization number.
+            organisasjonsnummer: The 9-digit organization number. Whitespace is
+                                 ignored, so "923 609 016" is accepted.
 
         Returns:
             An Enhet or SlettetEnhet object containing the entity's information.
             Note: Use `.model_dump(mode="json")` for JSON serialization to handle
                   types like dates correctly.
+
+        Raises:
+            BrregValidationError: If the organization number is malformed.
+            BrregResourceNotFoundError: If the entity does not exist.
+            BrregDataError: If the response can't be parsed.
         """
-        endpoint = f"/enheter/{organisasjonsnummer}"
-        cache_key = f"enhet_{organisasjonsnummer}"
-
-        response = await self._request("GET", endpoint, cache_key=cache_key)
-        data = response.json()
-
-        # Check if it's a deleted entity
-        # (schema indicates 'slettedato'/'respons_klasse')
-        if data.get("respons_klasse") == "SlettetEnhet" or "slettedato" in data:
-            try:
-                # Attempt parsing as SlettetEnhet first
-                return SlettetEnhet.model_validate(data)
-            except Exception as e:
-                self._logger.error(f"Error parsing SlettetEnhet: {e}", exc_info=True)
-                # Fallback if parsing SlettetEnhet fails unexpectedly
-                pass
-        # Default to parsing as Enhet
-        return Enhet.model_validate(data)
+        orgnr = _normalize_orgnr(organisasjonsnummer)
+        endpoint = f"/enheter/{orgnr}"
+        data = await self._get_json(endpoint)
+        model = SlettetEnhet if _is_deleted(data) else Enhet
+        return self._validate(model, data, endpoint)
 
     async def get_multiple_enheter(
-        self, organisasjonsnumre: List[str]
-    ) -> Dict[str, Union[Enhet, SlettetEnhet]]:
+        self,
+        organisasjonsnumre: Iterable[str],
+        max_concurrency: int = _DEFAULT_MAX_CONCURRENCY,
+    ) -> dict[str, Enhet | SlettetEnhet | BrregAPIError]:
         """
-        Retrieves information about multiple entities (enheter) in parallel.
+        Retrieves information about multiple entities (enheter) concurrently.
 
         Args:
-            organisasjonsnumre: A list of 9-digit organization numbers.
+            organisasjonsnumre: The 9-digit organization numbers. Duplicates are
+                                fetched once.
+            max_concurrency: Maximum number of requests in flight at once.
 
         Returns:
-            A dictionary mapping organization numbers to their respective Enhet or
-            SlettetEnhet objects.
+            A dictionary mapping each organization number to its Enhet or
+            SlettetEnhet, or to the BrregAPIError raised while fetching it.
         """
-        self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} entities")
+        return await self._gather_by_key(
+            organisasjonsnumre, self.get_enhet, max_concurrency
+        )
 
-        # Create tasks for each organization number
-        tasks = {
-            org_nr: asyncio.create_task(self.get_enhet(org_nr))
-            for org_nr in organisasjonsnumre
-        }
-
-        # Wait for all tasks to complete
-        results = {}
-        for org_nr, task in tasks.items():
-            try:
-                results[org_nr] = await task
-            except Exception as e:
-                self._logger.error(
-                    f"Error fetching entity {org_nr}: {e}", exc_info=True
-                )
-                # Store the error in the results
-                results[org_nr] = e
-
-        return results
-
-    async def search_enheter(self, **kwargs) -> Enheter1:
+    async def search_enheter(self, **params: Any) -> Enheter1:
         """
         Searches for entities (enheter) based on various criteria.
         Ref: https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-oppslag
 
         Args:
-            **kwargs: Search parameters as defined in the API documentation.
-                      Examples: navn, organisasjonsform, postadresse.postnummer, etc.
+            **params: Search parameters as defined in the API documentation.
+                      Examples: navn, organisasjonsform, kommunenummer, page, size.
+                      Dotted names can be passed via dict unpacking, e.g.
+                      ``**{"postadresse.postnummer": "0150"}``.
 
         Returns:
             An Enheter1 object containing the search results and metadata.
         """
-        endpoint = "/enheter"
-        cache_key = None
-        if self._cache_enabled:
-            sorted_items = sorted(
-                [
-                    (k, v)
-                    for k, v in {
-                        "query": kwargs.get("navn"),
-                        "organization_form": kwargs.get("organisasjonsform"),
-                        "municipality": kwargs.get("kommunenummer"),
-                        "page": kwargs.get("page"),
-                        "size": kwargs.get("size"),
-                    }.items()
-                    if v is not None
-                ],
-                key=lambda x: x[0],
-            )
-            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
-            cache_key = f"search_enheter_{param_str}"
+        return await self._get_model(Enheter1, "/enheter", params)
 
-        response = await self._request(
-            "GET", endpoint, params=kwargs, cache_key=cache_key
-        )
-        return Enheter1.model_validate(response.json())
-
-    async def download_enheter_json(self, **kwargs) -> httpx.Response:
+    async def download_enheter_json(self, **params: Any) -> bytes:
         """
-        Downloads entities (enheter) as a JSON file.
+        Downloads all entities (enheter) as a gzipped JSON file.
         Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned)
 
         Args:
-            **kwargs: Optional filter parameters similar to search_enheter.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the JSON file content.
-            Use response.content or response.text to access the data.
+            The gzip-compressed file content. Decompress with ``gzip.decompress``.
         """
-        endpoint = "/enheter/lastned"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        # Assuming standard JSON MIME type
-        accept_header = "application/json"
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/enheter/lastned", params)
 
-    async def download_enheter_csv(self, **kwargs) -> httpx.Response:
+    async def download_enheter_csv(self, **params: Any) -> bytes:
         """
-        Downloads entities (enheter) as a CSV file.
+        Downloads all entities (enheter) as a gzipped CSV file.
         Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned/csv)
 
         Args:
-            **kwargs: Optional filter parameters. Check API docs for specifics.
-                      Often includes parameters like 'levertEtter'.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the CSV file content.
-            Use response.content or response.text to access the data.
+            The gzip-compressed file content. Decompress with ``gzip.decompress``.
         """
-        endpoint = "/enheter/lastned/csv"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        accept_header = "text/csv"  # Standard CSV MIME type
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/enheter/lastned/csv", params)
 
-    async def download_enheter_spreadsheet(self, **kwargs) -> httpx.Response:
+    async def download_enheter_spreadsheet(self, **params: Any) -> bytes:
         """
-        Downloads entities (enheter) as a spreadsheet file (likely Excel).
+        Downloads all entities (enheter) as an Excel (.xlsx) spreadsheet.
         Ref: Provided Swagger (GET /enhetsregisteret/api/enheter/lastned/regneark)
 
         Args:
-            **kwargs: Optional filter parameters. Check API docs for specifics.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the spreadsheet file content.
-            Use response.content to access the binary data.
+            The spreadsheet file content.
         """
-        endpoint = "/enheter/lastned/regneark"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        # Common MIME type for Excel files
-        accept_header = (
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        # Alternative might be 'application/vnd.ms-excel' for older formats
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/enheter/lastned/regneark", params)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Underenhet Endpoints
@@ -668,150 +741,99 @@ class BrregClient:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-detalj
 
         Args:
-            organisasjonsnummer: The 9-digit organization number.
+            organisasjonsnummer: The 9-digit organization number. Whitespace is
+                                 ignored.
 
         Returns:
             A Underenhet or SlettetUnderenhet object containing the entity's
             information.
+
+        Raises:
+            BrregValidationError: If the organization number is malformed.
+            BrregResourceNotFoundError: If the sub-entity does not exist.
+            BrregDataError: If the response can't be parsed.
         """
-        endpoint = f"/underenheter/{organisasjonsnummer}"
-        cache_key = f"underenhet_{organisasjonsnummer}"
-
-        response = await self._request("GET", endpoint, cache_key=cache_key)
-        data = response.json()
-
-        # Check if it's a deleted entity
-        if data.get("respons_klasse") == "SlettetUnderenhet" or "slettedato" in data:
-            try:
-                return SlettetUnderenhet.model_validate(data)
-            except Exception as e:
-                self._logger.error(
-                    f"Error parsing SlettetUnderenhet: {e}", exc_info=True
-                )
-                # Fallback if parsing SlettetUnderenhet fails unexpectedly
-                pass
-        # Default to parsing as Underenhet
-        return Underenhet.model_validate(data)
+        orgnr = _normalize_orgnr(organisasjonsnummer)
+        endpoint = f"/underenheter/{orgnr}"
+        data = await self._get_json(endpoint)
+        model = SlettetUnderenhet if _is_deleted(data) else Underenhet
+        return self._validate(model, data, endpoint)
 
     async def get_multiple_underenheter(
-        self, organisasjonsnumre: List[str]
-    ) -> Dict[str, Union[Underenhet, SlettetUnderenhet]]:
+        self,
+        organisasjonsnumre: Iterable[str],
+        max_concurrency: int = _DEFAULT_MAX_CONCURRENCY,
+    ) -> dict[str, Underenhet | SlettetUnderenhet | BrregAPIError]:
         """
-        Retrieves information about multiple sub-entities (underenheter) in parallel.
+        Retrieves information about multiple sub-entities (underenheter)
+        concurrently.
 
         Args:
-            organisasjonsnumre: A list of 9-digit organization numbers.
+            organisasjonsnumre: The 9-digit organization numbers. Duplicates are
+                                fetched once.
+            max_concurrency: Maximum number of requests in flight at once.
 
         Returns:
-            A dictionary mapping organization numbers to their respective Underenhet
-            or SlettetUnderenhet objects.
+            A dictionary mapping each organization number to its Underenhet or
+            SlettetUnderenhet, or to the BrregAPIError raised while fetching it.
         """
-        self._logger.debug(f"Fetching data for {len(organisasjonsnumre)} sub-entities")
+        return await self._gather_by_key(
+            organisasjonsnumre, self.get_underenhet, max_concurrency
+        )
 
-        # Create tasks for each organization number
-        tasks = {
-            org_nr: asyncio.create_task(self.get_underenhet(org_nr))
-            for org_nr in organisasjonsnumre
-        }
-
-        # Wait for all tasks to complete
-        results = {}
-        for org_nr, task in tasks.items():
-            try:
-                results[org_nr] = await task
-            except Exception as e:
-                self._logger.error(
-                    f"Error fetching sub-entity {org_nr}: {e}", exc_info=True
-                )
-                # Store the error in the results
-                results[org_nr] = e
-
-        return results
-
-    async def search_underenheter(self, **kwargs) -> Underenheter1:
+    async def search_underenheter(self, **params: Any) -> Underenheter1:
         """
         Searches for sub-entities (underenheter) based on various criteria.
         Ref:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-underenheter-oppslag
 
         Args:
-            **kwargs: Search parameters as defined in the API documentation.
-                      Examples: navn, organisasjonsform, postadresse.postnummer, etc.
+            **params: Search parameters as defined in the API documentation.
+                      Examples: navn, organisasjonsform, overordnetEnhet, page, size.
 
         Returns:
             A Underenheter1 object containing the search results and metadata.
         """
-        endpoint = "/underenheter"
-        # Create cache key from sorted parameters
-        cache_key = None
-        if self._cache_enabled:
-            sorted_items = sorted(kwargs.items(), key=lambda x: x[0])
-            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
-            cache_key = f"search_underenheter_{param_str}"
+        return await self._get_model(Underenheter1, "/underenheter", params)
 
-        response = await self._request(
-            "GET", endpoint, params=kwargs, cache_key=cache_key
-        )
-        return Underenheter1.model_validate(response.json())
-
-    async def download_underenheter_json(self, **kwargs) -> httpx.Response:
+    async def download_underenheter_json(self, **params: Any) -> bytes:
         """
-        Downloads sub-entities (underenheter) as a JSON file.
+        Downloads all sub-entities (underenheter) as a gzipped JSON file.
         Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned)
 
         Args:
-            **kwargs: Optional filter parameters similar to search_underenheter.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the JSON file content.
-            Use response.content or response.text to access the data.
+            The gzip-compressed file content. Decompress with ``gzip.decompress``.
         """
-        endpoint = "/underenheter/lastned"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        accept_header = "application/json"
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/underenheter/lastned", params)
 
-    async def download_underenheter_csv(self, **kwargs) -> httpx.Response:
+    async def download_underenheter_csv(self, **params: Any) -> bytes:
         """
-        Downloads sub-entities (underenheter) as a CSV file.
+        Downloads all sub-entities (underenheter) as a gzipped CSV file.
         Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned/csv)
 
         Args:
-            **kwargs: Optional filter parameters. Check API docs for specifics.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the CSV file content.
-            Use response.content or response.text to access the data.
+            The gzip-compressed file content. Decompress with ``gzip.decompress``.
         """
-        endpoint = "/underenheter/lastned/csv"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        accept_header = "text/csv"
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/underenheter/lastned/csv", params)
 
-    async def download_underenheter_spreadsheet(self, **kwargs) -> httpx.Response:
+    async def download_underenheter_spreadsheet(self, **params: Any) -> bytes:
         """
-        Downloads sub-entities (underenheter) as a spreadsheet file (likely Excel).
+        Downloads all sub-entities (underenheter) as an Excel (.xlsx) spreadsheet.
         Ref: Provided Swagger (GET /enhetsregisteret/api/underenheter/lastned/regneark)
 
         Args:
-            **kwargs: Optional filter parameters. Check API docs for specifics.
+            **params: Optional filter parameters. Check API docs for specifics.
 
         Returns:
-            An httpx.Response object containing the spreadsheet file content.
-            Use response.content to access the binary data.
+            The spreadsheet file content.
         """
-        endpoint = "/underenheter/lastned/regneark"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        accept_header = (
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        return await self._download_request(
-            "GET", endpoint, accept_header, params=params
-        )
+        return await self._download("/underenheter/lastned/regneark", params)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Roller Endpoints
@@ -819,60 +841,31 @@ class BrregClient:
 
     async def get_rollegrupper(self) -> RolleRollegruppetyper:
         """
-        Retrieves all role groups types.
-        Ref:
-        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-rollegrupper
-             (Old link, endpoint confirmed from user)
+        Retrieves all role group types.
+        Ref: GET /enhetsregisteret/api/roller/rollegruppetyper
 
         Returns:
             A RolleRollegruppetyper object containing the list of role group types.
             Note: This method fetches all defined role group types, not roles for a
-                  specific entity. Use `get_enhet_roller` or `get_underenhet_roller`
-                  for entity-specific roles.
-                  Use `.model_dump(mode="json")` for JSON serialization if needed.
+                  specific entity. Use `get_enhet_roller` for entity-specific roles.
         """
-        endpoint = (
-            "/roller/rollegruppetyper"  # Corrected endpoint based on user provided docs
-        )
-        response = await self._request("GET", endpoint)
-        # The API returns the list directly, not nested under a key.
-        data = response.json()
-        if isinstance(data, list):
-            # Wrap the list response to match the RolleRollegruppetyper model structure
-            # which expects {"_embedded": {"rollegruppetyper": [...]}}
-            wrapped_data = {"_embedded": {"rollegruppetyper": data}}
-            return RolleRollegruppetyper.model_validate(wrapped_data)
-        else:
-            # If the response is already structured (unexpected for this endpoint),
-            # validate directly, though this path is unlikely for /kodeverk endpoints.
-            return RolleRollegruppetyper.model_validate(data)
+        endpoint = "/roller/rollegruppetyper"
+        data = await self._get_json(endpoint)
+        wrapped = self._wrap_embedded(data, "rollegruppetyper")
+        return self._validate(RolleRollegruppetyper, wrapped, endpoint)
 
     async def get_roller(self) -> RolleRolletyper:
         """
         Retrieves all role types.
-        Ref:
-        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-roller-roller
+        Ref: GET /enhetsregisteret/api/roller/rolletyper
 
         Returns:
             A RolleRolletyper object containing the list of role types.
-            Note: This method fetches all defined role types.
-                  Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = (
-            "/roller/rolletyper"  # Corrected endpoint based on user provided docs
-        )
-        response = await self._request("GET", endpoint)
-        # The API returns the list directly, not nested under a key.
-        data = response.json()
-        if isinstance(data, list):
-            # Wrap the list response to match the RolleRolletyper model structure
-            # which expects {"_embedded": {"rolletyper": [...]}}
-            wrapped_data = {"_embedded": {"rolletyper": data}}
-            return RolleRolletyper.model_validate(wrapped_data)
-        else:
-            # If the response is already structured (unexpected for this endpoint),
-            # validate directly, though this path is unlikely for /kodeverk endpoints.
-            return RolleRolletyper.model_validate(data)
+        endpoint = "/roller/rolletyper"
+        data = await self._get_json(endpoint)
+        wrapped = self._wrap_embedded(data, "rolletyper")
+        return self._validate(RolleRolletyper, wrapped, endpoint)
 
     async def get_enhet_roller(self, organisasjonsnummer: str) -> Roller:
         """
@@ -885,25 +878,19 @@ class BrregClient:
 
         Returns:
             A Roller object containing the roles for the entity.
-            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = f"/enheter/{organisasjonsnummer}/roller"
-        response = await self._request("GET", endpoint)
-        return Roller.model_validate(response.json())
+        orgnr = _normalize_orgnr(organisasjonsnummer)
+        return await self._get_model(Roller, f"/enheter/{orgnr}/roller")
 
-    async def download_roller_totalbestand(self) -> httpx.Response:
+    async def download_roller_totalbestand(self) -> bytes:
         """
-        Downloads the total inventory of roles as a zipped JSON file.
+        Downloads the total inventory of roles as a gzipped JSON file.
         Ref: Provided Swagger (GET /enhetsregisteret/api/roller/totalbestand)
 
         Returns:
-            An httpx.Response object containing the zipped JSON file content.
-            Use response.content to access the binary data.
+            The gzip-compressed file content. Decompress with ``gzip.decompress``.
         """
-        endpoint = "/roller/totalbestand"
-        # MIME type for zip files
-        accept_header = "application/zip"
-        return await self._download_request("GET", endpoint, accept_header)
+        return await self._download("/roller/totalbestand")
 
     async def get_rolle_representanter(self) -> RolleRepresentanter:
         """
@@ -912,40 +899,32 @@ class BrregClient:
 
         Returns:
             A RolleRepresentanter object containing the list of role representatives.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
         """
-        endpoint = "/roller/representanter"
-        response = await self._request("GET", endpoint)
-        # Model expects data directly (likely with _embedded)
-        return RolleRepresentanter.model_validate(response.json())
+        return await self._get_model(RolleRepresentanter, "/roller/representanter")
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Kommuner Endpoints
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    async def get_kommuner(self) -> Kommuner1:
+    async def get_kommuner(self, **params: Any) -> Kommuner1:
         """
-        Retrieves all municipalities (kommuner).
+        Retrieves municipalities (kommuner).
         Ref:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-kodeverk-kommuner
 
+        This endpoint is paginated (20 per page by default). Pass ``page`` and
+        ``size`` to fetch more, e.g. ``get_kommuner(size=1000)``.
+
+        Args:
+            **params: Optional query parameters such as page and size.
+
         Returns:
-            A Kommuner1 object containing the list of municipalities.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
+            A Kommuner1 object containing the municipalities and page metadata.
         """
-        endpoint = "/kommuner"  # Corrected endpoint based on user provided docs
-        response = await self._request("GET", endpoint)
-        # The API returns the list directly, not nested under a key.
-        data = response.json()
-        if isinstance(data, list):
-            # Wrap the list response to match the Kommuner1 model structure
-            wrapped_data = {"_embedded": {"kommuner": data}}
-            return Kommuner1.model_validate(wrapped_data)
-        else:
-            # If the response is already structured, validate directly
-            return Kommuner1.model_validate(data)
+        endpoint = "/kommuner"
+        data = await self._get_json(endpoint, params)
+        wrapped = self._wrap_embedded(data, "kommuner")
+        return self._validate(Kommuner1, wrapped, endpoint)
 
     async def get_kommune(self, kommunenummer: str) -> Kommune:
         """
@@ -957,12 +936,10 @@ class BrregClient:
 
         Returns:
             A Kommune object containing the municipality's information.
-            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = f"/kommuner/{kommunenummer}"
-        response = await self._request("GET", endpoint)
-        # The Kommune model expects the data directly
-        return Kommune.model_validate(response.json())
+        return await self._get_model(
+            Kommune, f"/kommuner/{_path_segment(kommunenummer)}"
+        )
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Organisasjonsformer Endpoints
@@ -976,28 +953,11 @@ class BrregClient:
 
         Returns:
             An Organisasjonsformer1 object containing the list of organization forms.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
         """
-        endpoint = (
-            "/organisasjonsformer"  # Corrected endpoint based on user provided docs
-        )
-        response = await self._request("GET", endpoint)
-        # Assuming the response structure might be a direct list like kommuner or nested
-        data = response.json()
-        # Check if the response is a list and wrap if necessary, similar to kommuner
-        # This assumes the model Organisasjonsformer1 expects a structure like
-        # {"_embedded": {"organisasjonsformer": [...]}} if the API returns a list.
-        # If the API returns the nested structure directly, this check isn't needed.
-        # Adjust based on actual API behavior or model definition if validation fails.
-        if isinstance(data, list):
-            # Wrap the list response if the model expects it
-            # Adjust the key "organisasjonsformer" if the model expects something else
-            wrapped_data = {"_embedded": {"organisasjonsformer": data}}
-            return Organisasjonsformer1.model_validate(wrapped_data)
-        else:
-            # If the response is already structured as the model expects
-            return Organisasjonsformer1.model_validate(data)
+        endpoint = "/organisasjonsformer"
+        data = await self._get_json(endpoint)
+        wrapped = self._wrap_embedded(data, "organisasjonsformer")
+        return self._validate(Organisasjonsformer1, wrapped, endpoint)
 
     async def get_organisasjonsformer_enheter(self) -> OrganisasjonsformerEnheter:
         """
@@ -1007,13 +967,10 @@ class BrregClient:
         Returns:
             An OrganisasjonsformerEnheter object containing the list of organization
             forms for entities.
-            Note: Use `.model_dump(mode="json")` on contained models for JSON
-                  serialization if needed.
         """
-        endpoint = "/organisasjonsformer/enheter"
-        response = await self._request("GET", endpoint)
-        # Model expects data directly (likely with _embedded)
-        return OrganisasjonsformerEnheter.model_validate(response.json())
+        return await self._get_model(
+            OrganisasjonsformerEnheter, "/organisasjonsformer/enheter"
+        )
 
     async def get_organisasjonsformer_underenheter(
         self,
@@ -1025,13 +982,10 @@ class BrregClient:
         Returns:
             An OrganisasjonsformerUnderenheter object containing the list of
             organization forms for sub-entities.
-            Note: Use `.model_dump(mode="json")` on contained models for JSON
-                  serialization if needed.
         """
-        endpoint = "/organisasjonsformer/underenheter"
-        response = await self._request("GET", endpoint)
-        # Model expects data directly (likely with _embedded)
-        return OrganisasjonsformerUnderenheter.model_validate(response.json())
+        return await self._get_model(
+            OrganisasjonsformerUnderenheter, "/organisasjonsformer/underenheter"
+        )
 
     async def get_organisasjonsform(self, organisasjonskode: str) -> Organisasjonsform:
         """
@@ -1043,65 +997,53 @@ class BrregClient:
 
         Returns:
             An Organisasjonsform object containing the organization form's description.
-            Note: Use `.model_dump(mode="json")` for JSON serialization if needed.
         """
-        endpoint = f"/organisasjonsformer/{organisasjonskode}"
-        response = await self._request("GET", endpoint)
-        # The Organisasjonsform model expects the data directly
-        return Organisasjonsform.model_validate(response.json())
+        return await self._get_model(
+            Organisasjonsform,
+            f"/organisasjonsformer/{_path_segment(organisasjonskode)}",
+        )
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Matrikkelenhet Endpoints
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    async def get_matrikkelenheter(self, **kwargs) -> Matrikkelenheter:
+    async def get_matrikkelenheter(self, **params: Any) -> Matrikkelenheter:
         """
         Retrieves cadastral units (matrikkelenheter).
         Ref: Provided Swagger (GET /enhetsregisteret/api/matrikkelenhet)
 
         Args:
-            **kwargs: Optional query parameters (check API docs for specifics).
+            **params: Optional query parameters (check API docs for specifics).
 
         Returns:
             A Matrikkelenheter object (RootModel wrapping a list) containing the
             cadastral units.
-            Note: Use `.model_dump(mode="json")` on contained models for JSON
-                  serialization if needed.
         """
-        endpoint = "/matrikkelenhet"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        response = await self._request("GET", endpoint, params=params)
-        # Matrikkelenheter is a RootModel expecting a list directly
-        return Matrikkelenheter.model_validate(response.json())
+        return await self._get_model(Matrikkelenheter, "/matrikkelenhet", params)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Oppdateringer Endpoints
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    async def get_enhet_oppdateringer(self, **kwargs) -> OppdateringerEnheter1:
+    async def get_enhet_oppdateringer(self, **params: Any) -> OppdateringerEnheter1:
         """
         Retrieves updates for entities (enheter).
         Ref:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-enheter
 
         Args:
-            **kwargs: Optional query parameters like oppdateringsid, dato,
-                      fraAntallDoegn, status, oppdateringstype, page, size.
+            **params: Optional query parameters like oppdateringsid, dato,
+                      page, size.
 
         Returns:
             An OppdateringerEnheter1 object containing the entity updates.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
         """
-        endpoint = "/oppdateringer/enheter"
-        params = {
-            k: v for k, v in kwargs.items() if v is not None
-        }  # Filter out None values
-        response = await self._request("GET", endpoint, params=params)
-        return OppdateringerEnheter1.model_validate(response.json())
+        return await self._get_model(
+            OppdateringerEnheter1, "/oppdateringer/enheter", params
+        )
 
     async def get_underenhet_oppdateringer(
-        self, **kwargs
+        self, **params: Any
     ) -> OppdateringerUnderenheter1:
         """
         Retrieves updates for sub-entities (underenheter).
@@ -1109,115 +1051,47 @@ class BrregClient:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-oppdateringer-underenheter
 
         Args:
-            **kwargs: Optional query parameters like oppdateringsid, dato,
-                      fraAntallDoegn, status, oppdateringstype, page, size.
+            **params: Optional query parameters like oppdateringsid, dato,
+                      page, size.
 
         Returns:
             An OppdateringerUnderenheter1 object containing the sub-entity updates.
-            Note: Use `.model_dump(mode="json")` on the contained models for
-                  JSON serialization if needed.
         """
-        endpoint = "/oppdateringer/underenheter"
-        params = {
-            k: v for k, v in kwargs.items() if v is not None
-        }  # Filter out None values
-        response = await self._request("GET", endpoint, params=params)
-        return OppdateringerUnderenheter1.model_validate(response.json())
+        return await self._get_model(
+            OppdateringerUnderenheter1, "/oppdateringer/underenheter", params
+        )
 
-    async def get_rolle_oppdateringer(self, **kwargs) -> RolleOppdateringer:
+    async def get_rolle_oppdateringer(self, **params: Any) -> RolleOppdateringer:
         """
         Retrieves updates for roles.
         Ref: Provided Swagger (GET /enhetsregisteret/api/oppdateringer/roller)
 
         Args:
-            **kwargs: Optional query parameters like oppdateringsid, dato, etc.
-                      (Check API docs for specifics).
+            **params: Optional query parameters like afterId, afterTime, size.
 
         Returns:
             A RolleOppdateringer object (RootModel wrapping a list) containing the
             role updates.
-            Note: Use `.model_dump(mode="json")` on contained models for JSON
-                  serialization if needed.
         """
-        endpoint = "/oppdateringer/roller"
-        params = {k: v for k, v in kwargs.items() if v is not None}
-        response = await self._request("GET", endpoint, params=params)
-        # RolleOppdateringer is a RootModel expecting a list directly
-        return RolleOppdateringer.model_validate(response.json())
+        return await self._get_model(
+            RolleOppdateringer, "/oppdateringer/roller", params
+        )
 
-    async def get_organization(self, org_number: str) -> Union[Enhet, SlettetEnhet]:
-        """
-        Fetches detailed information about a specific organization.
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # English-named convenience aliases
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        Args:
-            org_number: The organization number to look up.
-
-        Returns:
-            An Enhet or SlettetEnhet object containing the organization's information.
-
-        Raises:
-            BrregResourceNotFoundError: If the organization is not found.
-            BrregAPIError: If the API returns an error.
-
-        Ref:
-        https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-detalj
-        """
-        endpoint = f"/enheter/{org_number}"
-        cache_key = f"enhet_{org_number}"
-
-        response = await self._request("GET", endpoint, cache_key=cache_key)
-        data = response.json()
-
-        # Check if it's a deleted entity
-        # (schema indicates 'slettedato'/'respons_klasse')
-        if data.get("respons_klasse") == "SlettetEnhet" or "slettedato" in data:
-            try:
-                # Attempt parsing as SlettetEnhet first
-                return SlettetEnhet.model_validate(data)
-            except Exception as e:
-                self._logger.error(f"Error parsing SlettetEnhet: {e}", exc_info=True)
-                # Fallback if parsing SlettetEnhet fails unexpectedly
-                pass
-        # Default to parsing as Enhet
-        return Enhet.model_validate(data)
+    async def get_organization(self, org_number: str) -> Enhet | SlettetEnhet:
+        """Alias for :meth:`get_enhet`."""
+        return await self.get_enhet(org_number)
 
     async def get_organizations_batch(
-        self, org_numbers: List[str]
-    ) -> Dict[str, Union[Enhet, SlettetEnhet]]:
-        """
-        Fetches detailed information about multiple organizations in a batch.
-
-        Args:
-            org_numbers: A list of organization numbers to look up.
-
-        Returns:
-            A dictionary mapping organization numbers to their respective Enhet
-            or SlettetEnhet objects.
-
-        Raises:
-            BrregAPIError: If the API returns an error.
-        """
-        self._logger.debug(f"Fetching data for {len(org_numbers)} entities")
-
-        # Create tasks for each organization number
-        tasks = {
-            org_nr: asyncio.create_task(self.get_organization(org_nr))
-            for org_nr in org_numbers
-        }
-
-        # Wait for all tasks to complete
-        results = {}
-        for org_nr, task in tasks.items():
-            try:
-                results[org_nr] = await task
-            except Exception as e:
-                self._logger.error(
-                    f"Error fetching entity {org_nr}: {e}", exc_info=True
-                )
-                # Store the error in the results
-                results[org_nr] = e
-
-        return results
+        self,
+        org_numbers: Iterable[str],
+        max_concurrency: int = _DEFAULT_MAX_CONCURRENCY,
+    ) -> dict[str, Enhet | SlettetEnhet | BrregAPIError]:
+        """Alias for :meth:`get_multiple_enheter`."""
+        return await self.get_multiple_enheter(org_numbers, max_concurrency)
 
     async def search_organizations(
         self,
@@ -1228,55 +1102,25 @@ class BrregClient:
         size: int = 20,
     ) -> Enheter1:
         """
-        Searches for organizations based on various criteria.
+        Searches for organizations based on common criteria.
 
         Args:
-            query: Free text search query.
-            organization_form: Organization form code.
-            municipality: Municipality code.
+            query: Name search (``navn``).
+            organization_form: Organization form code(s), e.g. "AS" or "AS,ASA".
+            municipality: Municipality number, e.g. "0301".
             page: Page number for pagination, starting from 0.
             size: Number of results per page, default 20.
 
         Returns:
             An Enheter1 object containing the search results.
 
-        Raises:
-            BrregAPIError: If the API returns an error.
-
         Ref:
         https://data.brreg.no/enhetsregisteret/api/docs/index.html#rest-api-enheter-oppslag
         """
-        endpoint = "/enheter"
-        cache_key = None
-        if self._cache_enabled:
-            sorted_items = sorted(
-                [
-                    (k, v)
-                    for k, v in {
-                        "query": query,
-                        "organization_form": organization_form,
-                        "municipality": municipality,
-                        "page": page,
-                        "size": size,
-                    }.items()
-                    if v is not None
-                ],
-                key=lambda x: x[0],
-            )
-            param_str = "&".join(f"{k}={v}" for k, v in sorted_items)
-            cache_key = f"search_enheter_{param_str}"
-
-        # Create params dictionary
-        params = {
-            "navn": query,
-            "organisasjonsform.kode": organization_form,
-            "kommunenummer": municipality,
-            "page": page,
-            "size": size,
-        }
-        params = {k: v for k, v in params.items() if v is not None}
-
-        response = await self._request(
-            "GET", endpoint, params=params, cache_key=cache_key
+        return await self.search_enheter(
+            navn=query,
+            organisasjonsform=organization_form,
+            kommunenummer=municipality,
+            page=page,
+            size=size,
         )
-        return Enheter1.model_validate(response.json())

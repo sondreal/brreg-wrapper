@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 class InternalServerError(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     timestamp: str = Field(
         ...,
@@ -44,7 +44,7 @@ class InternalServerError(BaseModel):
 
 class Self(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -55,7 +55,7 @@ class Self(BaseModel):
 
 class Enheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -66,7 +66,7 @@ class Enheter(BaseModel):
 
 class Underenheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -77,7 +77,7 @@ class Underenheter(BaseModel):
 
 class Organisasjonsformer(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -88,7 +88,7 @@ class Organisasjonsformer(BaseModel):
 
 class OppdateringerEnheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -99,7 +99,7 @@ class OppdateringerEnheter(BaseModel):
 
 class OppdateringerUnderenheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -112,7 +112,7 @@ class OppdateringerUnderenheter(BaseModel):
 
 class Kommuner(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -123,7 +123,7 @@ class Kommuner(BaseModel):
 
 class FieldLinks(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Self
     enheter: Enheter
@@ -140,14 +140,14 @@ class FieldLinks(BaseModel):
 
 class Root(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks] = Field(None, alias="_links")
 
 
 class LegacyPaategning(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     infotype: Optional[str] = Field(
         None, description="Påtegningens infotype", examples=["NAVN"]
@@ -164,7 +164,7 @@ class LegacyPaategning(BaseModel):
 
 class HistoriskNavn(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     navn: str = Field(..., description="Historisk navn")
     fraDato: str = Field(
@@ -181,7 +181,7 @@ class HistoriskNavn(BaseModel):
 
 class Self1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -194,14 +194,14 @@ class Self1(BaseModel):
 
 class FieldLinks1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self1] = None
 
 
 class Organisasjonsform(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks1] = Field(None, alias="_links")
     kode: str = Field(..., description="Organisasjonsformen", examples=["ASA"])
@@ -219,7 +219,7 @@ class Organisasjonsform(BaseModel):
 
 class Postadresse(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kommune: Optional[str] = Field(
         None, description="Kommunenavn (postadresse)", examples=["Oslo"]
@@ -246,7 +246,7 @@ class Postadresse(BaseModel):
 
 class Forretningsadresse(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kommune: Optional[str] = Field(
         None, description="Kommunenavn (forretningsadresse)", examples=["Oslo"]
@@ -273,7 +273,7 @@ class Forretningsadresse(BaseModel):
 
 class Naeringskode1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
@@ -285,7 +285,7 @@ class Naeringskode1(BaseModel):
 
 class Naeringskode2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
@@ -297,7 +297,7 @@ class Naeringskode2(BaseModel):
 
 class Naeringskode3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: Optional[str] = Field(None, description="Næringskoden", examples=["41.109"])
     beskrivelse: Optional[str] = Field(
@@ -309,7 +309,7 @@ class Naeringskode3(BaseModel):
 
 class Hjelpeenhetskode(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: Optional[str] = Field(
         None, description="Hjelpeenhetskode", examples=["70.100"]
@@ -323,7 +323,7 @@ class Hjelpeenhetskode(BaseModel):
 
 class InstitusjonellSektorkode(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: Optional[str] = Field(None, description="Sektorkoden", examples=["8200"])
     beskrivelse: Optional[str] = Field(
@@ -335,7 +335,7 @@ class InstitusjonellSektorkode(BaseModel):
 
 class OverordnetEnhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -346,7 +346,7 @@ class OverordnetEnhet(BaseModel):
 
 class Self2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -357,7 +357,7 @@ class Self2(BaseModel):
 
 class FieldLinks2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     overordnetEnhet: Optional[OverordnetEnhet] = None
     self: Optional[Self2] = None
@@ -365,7 +365,7 @@ class FieldLinks2(BaseModel):
 
 class Enhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     respons_klasse: Optional[Literal["Enhet"]] = None
     organisasjonsnummer: str = Field(
@@ -597,7 +597,7 @@ class Enhet(BaseModel):
 
 class Page(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     number: float = Field(..., description="Nummer på gjeldende side", examples=[1])
     size: float = Field(..., description="Sidestørrelse på resultatet", examples=[20])
@@ -611,7 +611,7 @@ class Page(BaseModel):
 
 class Next(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -622,7 +622,7 @@ class Next(BaseModel):
 
 class Last(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -635,7 +635,7 @@ class Last(BaseModel):
 
 class Prev(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -646,7 +646,7 @@ class Prev(BaseModel):
 
 class Self3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -657,7 +657,7 @@ class Self3(BaseModel):
 
 class First(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -668,7 +668,7 @@ class First(BaseModel):
 
 class FieldLinks3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     next: Optional[Next] = None
     last: Optional[Last] = None
@@ -679,7 +679,7 @@ class FieldLinks3(BaseModel):
 
 class FieldEmbedded(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     enheter: Optional[Sequence[Enhet]] = Field(
         None, description="En liste av enheter som finnes i Enhetsregisteret"
@@ -688,7 +688,7 @@ class FieldEmbedded(BaseModel):
 
 class Enheter1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: FieldLinks3 = Field(..., alias="_links")
     field_embedded: Optional[FieldEmbedded] = Field(None, alias="_embedded")
@@ -697,7 +697,7 @@ class Enheter1(BaseModel):
 
 class ValideringsFeil(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     feilaktigVerdi: Optional[str] = Field(
         None, description="Current value", examples=["[INC]"]
@@ -714,7 +714,7 @@ class ValideringsFeil(BaseModel):
 
 class BadRequest(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     antallFeil: float = Field(..., description="Number of errors", examples=[4])
     valideringsfeil: Sequence[ValideringsFeil] = Field(
@@ -746,7 +746,7 @@ class EnheterLastned(RootModel[bytes]):
 
 class Self4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -757,14 +757,14 @@ class Self4(BaseModel):
 
 class FieldLinks4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self4] = None
 
 
 class Organisasjonsform1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks4] = Field(None, alias="_links")
     kode: str = Field(..., description="Organisasjonsformen", examples=["ASA"])
@@ -782,7 +782,7 @@ class Organisasjonsform1(BaseModel):
 
 class Self5(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -793,14 +793,14 @@ class Self5(BaseModel):
 
 class FieldLinks5(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self5] = None
 
 
 class SlettetEnhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     respons_klasse: Optional[Literal["SlettetEnhet"]] = None
     organisasjonsnummer: str = Field(
@@ -816,14 +816,14 @@ class SlettetEnhet(BaseModel):
 
 class FieldLinks6(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self5] = None
 
 
 class GoneEnhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     organisasjonsnummer: str = Field(
         ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
@@ -836,7 +836,7 @@ class GoneEnhet(BaseModel):
 
 class Self7(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -849,14 +849,14 @@ class Self7(BaseModel):
 
 class FieldLinks7(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self7] = None
 
 
 class RolleRollegruppetype(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: str = Field(..., description="Koden", examples=["ADOS"])
     beskrivelse: str = Field(
@@ -869,7 +869,7 @@ class RolleRollegruppetype(BaseModel):
 
 class Self8(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -880,14 +880,14 @@ class Self8(BaseModel):
 
 class FieldLinks8(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self8] = None
 
 
 class RolleRolletype(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: str = Field(..., description="Koden", examples=["ADOS"])
     beskrivelse: str = Field(
@@ -918,7 +918,7 @@ class RollePerson(BaseModel):
 
 class Self9(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -929,7 +929,7 @@ class Self9(BaseModel):
 
 class FieldLinks9(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self9] = None
 
@@ -948,7 +948,7 @@ class RolleEnhet(BaseModel):
 
 class Self10(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -961,7 +961,7 @@ class Self10(BaseModel):
 
 class FieldLinks10(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self10] = None
 
@@ -1008,7 +1008,7 @@ class RollegrupperItem(BaseModel):
 
 class Self11(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1019,7 +1019,7 @@ class Self11(BaseModel):
 
 class Enhet1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1030,7 +1030,7 @@ class Enhet1(BaseModel):
 
 class FieldLinks11(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self11] = None
     enhet: Optional[Enhet1] = None
@@ -1038,7 +1038,7 @@ class FieldLinks11(BaseModel):
 
 class Roller(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     rollegrupper: Optional[Sequence[RollegrupperItem]] = Field(
         None, description="Liste av rollegrupper"
@@ -1048,7 +1048,7 @@ class Roller(BaseModel):
 
 class Self12(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1061,14 +1061,14 @@ class Self12(BaseModel):
 
 class FieldLinks12(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self12] = None
 
 
 class Organisasjonsform2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks12] = Field(None, alias="_links")
     kode: str = Field(..., description="Organisasjonsformen", examples=["BEDR"])
@@ -1086,7 +1086,7 @@ class Organisasjonsform2(BaseModel):
 
 class Postadresse1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kommune: Optional[str] = Field(
         None, description="Kommunenavn (postadresse)", examples=["Oslo"]
@@ -1113,7 +1113,7 @@ class Postadresse1(BaseModel):
 
 class Beliggenhetsadresse(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kommune: Optional[str] = Field(
         None, description="Kommunenavn (beliggenhetsadresse)", examples=["Oslo"]
@@ -1140,7 +1140,7 @@ class Beliggenhetsadresse(BaseModel):
 
 class OverordnetEnhet1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1151,7 +1151,7 @@ class OverordnetEnhet1(BaseModel):
 
 class Self13(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1162,7 +1162,7 @@ class Self13(BaseModel):
 
 class FieldLinks13(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     overordnetEnhet: Optional[OverordnetEnhet1] = None
     self: Optional[Self13] = None
@@ -1170,7 +1170,7 @@ class FieldLinks13(BaseModel):
 
 class Underenhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     respons_klasse: Optional[Literal["Underenhet"]] = None
     organisasjonsnummer: str = Field(
@@ -1271,7 +1271,7 @@ class Underenhet(BaseModel):
 
 class Self14(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1282,7 +1282,7 @@ class Self14(BaseModel):
 
 class FieldLinks14(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     next: Optional[Next] = None
     last: Optional[Last] = None
@@ -1293,7 +1293,7 @@ class FieldLinks14(BaseModel):
 
 class FieldEmbedded1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     underenheter: Optional[Sequence[Underenhet]] = Field(
         None, description="En liste av underenheter som finnes i Enhetsregisteret"
@@ -1302,7 +1302,7 @@ class FieldEmbedded1(BaseModel):
 
 class Underenheter1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: FieldLinks14 = Field(..., alias="_links")
     field_embedded: Optional[FieldEmbedded1] = Field(None, alias="_embedded")
@@ -1315,7 +1315,7 @@ class UnderenheterLastned(RootModel[bytes]):
 
 class Self15(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1328,14 +1328,14 @@ class Self15(BaseModel):
 
 class FieldLinks15(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self15] = None
 
 
 class Organisasjonsform3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks15] = Field(None, alias="_links")
     kode: str = Field(..., description="Organisasjonsformen", examples=["BEDR"])
@@ -1353,7 +1353,7 @@ class Organisasjonsform3(BaseModel):
 
 class Self16(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1364,16 +1364,16 @@ class Self16(BaseModel):
 
 class FieldLinks16(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self16] = None
 
 
 class SlettetUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
-    respons_klasse: Optional[Literal["SlettetEnhet"]] = None
+    respons_klasse: Optional[Literal["SlettetEnhet", "SlettetUnderenhet"]] = None
     organisasjonsnummer: str = Field(
         ..., description="Underenhetens organisasjonsnummer", examples=["509100675"]
     )
@@ -1389,14 +1389,14 @@ class SlettetUnderenhet(BaseModel):
 
 class FieldLinks17(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self16] = None
 
 
 class GoneUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     organisasjonsnummer: str = Field(
         ..., description="Organisasjonsnummeret til enheten", examples=["509100675"]
@@ -1409,7 +1409,7 @@ class GoneUnderenhet(BaseModel):
 
 class Self18(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1420,14 +1420,14 @@ class Self18(BaseModel):
 
 class FieldLinks18(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self18] = None
 
 
 class Kommune(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks18] = Field(None, alias="_links")
     nummer: str = Field(..., description="Kommunenummeret", examples=["0301"])
@@ -1436,7 +1436,7 @@ class Kommune(BaseModel):
 
 class Next2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1447,7 +1447,7 @@ class Next2(BaseModel):
 
 class Last2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1460,7 +1460,7 @@ class Last2(BaseModel):
 
 class Prev2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1471,7 +1471,7 @@ class Prev2(BaseModel):
 
 class Self19(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1482,7 +1482,7 @@ class Self19(BaseModel):
 
 class First2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1493,7 +1493,7 @@ class First2(BaseModel):
 
 class FieldLinks19(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     next: Optional[Next2] = None
     last: Optional[Last2] = None
@@ -1504,7 +1504,7 @@ class FieldLinks19(BaseModel):
 
 class FieldEmbedded2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kommuner: Sequence[Kommune] = Field(
         ..., description="En liste av kommuner som finnes i Enhetsregisteret"
@@ -1513,7 +1513,7 @@ class FieldEmbedded2(BaseModel):
 
 class Kommuner1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks19] = Field(None, alias="_links")
     field_embedded: Optional[FieldEmbedded2] = Field(None, alias="_embedded")
@@ -1522,7 +1522,7 @@ class Kommuner1(BaseModel):
 
 class Enheter2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1535,7 +1535,7 @@ class Enheter2(BaseModel):
 
 class Underenheter2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1548,7 +1548,7 @@ class Underenheter2(BaseModel):
 
 class Self20(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1559,7 +1559,7 @@ class Self20(BaseModel):
 
 class FieldLinks20(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     enheter: Optional[Enheter2] = None
     underenheter: Optional[Underenheter2] = None
@@ -1568,7 +1568,7 @@ class FieldLinks20(BaseModel):
 
 class FieldEmbedded3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     organisasjonsformer: Sequence[Organisasjonsform1] = Field(
         ..., description="En liste av organisasjonsformer som finnes i Enhetsregisteret"
@@ -1577,7 +1577,7 @@ class FieldEmbedded3(BaseModel):
 
 class Organisasjonsformer1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks20] = Field(
         None, alias="_links", description="Links to resources"
@@ -1588,14 +1588,14 @@ class Organisasjonsformer1(BaseModel):
 
 class FieldLinks21(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self20] = None
 
 
 class OrganisasjonsformerEnheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks21] = Field(None, alias="_links")
     field_embedded: Optional[FieldEmbedded3] = Field(None, alias="_embedded")
@@ -1604,14 +1604,14 @@ class OrganisasjonsformerEnheter(BaseModel):
 
 class FieldLinks22(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self20] = None
 
 
 class OrganisasjonsformerUnderenheter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks22] = Field(None, alias="_links")
     field_embedded: Optional[FieldEmbedded3] = Field(None, alias="_embedded")
@@ -1620,7 +1620,7 @@ class OrganisasjonsformerUnderenheter(BaseModel):
 
 class Matrikkelenhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     orgnr: str = Field(..., description="Organisasjonsnummer", examples=[987654321])
     kommnr: str = Field(..., description="Kommunenummer", examples=[1234])
@@ -1645,7 +1645,7 @@ class Matrikkelenheter(RootModel[Sequence[Matrikkelenhet]]):
 
 class Data(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     organisasjonsnummer: Optional[str] = Field(
         None, description="Unik id-nummer tilhørende hendelsen", examples=["974760673"]
@@ -1654,7 +1654,7 @@ class Data(BaseModel):
 
 class RolleOppdatering(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     specversion: str = Field(
         ..., description="Versjon for CloudEvent spesifikasjon", examples=[1]
@@ -1686,7 +1686,7 @@ class RolleOppdateringer(RootModel[Sequence[RolleOppdatering]]):
 
 class Enhet2(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1697,14 +1697,14 @@ class Enhet2(BaseModel):
 
 class FieldLinks23(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     enhet: Optional[Enhet2] = None
 
 
 class OppdateringerEnhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     oppdateringsid: float = Field(
         ..., description="Sekvensiell oppdateringsid for enhet.", examples=[1]
@@ -1728,7 +1728,7 @@ class OppdateringerEnhet(BaseModel):
 
 class Next3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1741,7 +1741,7 @@ class Next3(BaseModel):
 
 class Last3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1754,7 +1754,7 @@ class Last3(BaseModel):
 
 class Prev3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1767,7 +1767,7 @@ class Prev3(BaseModel):
 
 class Self23(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1778,7 +1778,7 @@ class Self23(BaseModel):
 
 class First3(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1791,7 +1791,7 @@ class First3(BaseModel):
 
 class FieldLinks24(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     next: Optional[Next3] = None
     last: Optional[Last3] = None
@@ -1802,7 +1802,7 @@ class FieldLinks24(BaseModel):
 
 class FieldEmbedded6(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     oppdaterteEnheter: Sequence[OppdateringerEnhet] = Field(
         ..., description="En liste av oppdaterte enheter"
@@ -1811,7 +1811,7 @@ class FieldEmbedded6(BaseModel):
 
 class OppdateringerEnheter1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks24] = Field(None, alias="_links")
     field_embedded: Optional[FieldEmbedded6] = Field(None, alias="_embedded")
@@ -1820,7 +1820,7 @@ class OppdateringerEnheter1(BaseModel):
 
 class Underenhet1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1831,14 +1831,14 @@ class Underenhet1(BaseModel):
 
 class FieldLinks25(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     underenhet: Optional[Underenhet1] = None
 
 
 class OppdateringerUnderenhet(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     oppdateringsid: float = Field(
         ..., description="Sekvensiell oppdateringsid for enhet.", examples=[1]
@@ -1862,7 +1862,7 @@ class OppdateringerUnderenhet(BaseModel):
 
 class Next4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1875,7 +1875,7 @@ class Next4(BaseModel):
 
 class Last4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1888,7 +1888,7 @@ class Last4(BaseModel):
 
 class Prev4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1901,7 +1901,7 @@ class Prev4(BaseModel):
 
 class Self24(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1914,7 +1914,7 @@ class Self24(BaseModel):
 
 class First4(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: Optional[str] = Field(
         None,
@@ -1927,7 +1927,7 @@ class First4(BaseModel):
 
 class FieldLinks26(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     next: Optional[Next4] = None
     last: Optional[Last4] = None
@@ -1938,7 +1938,7 @@ class FieldLinks26(BaseModel):
 
 class FieldEmbedded7(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     oppdaterteUnderenheter: Sequence[OppdateringerUnderenhet] = Field(
         ..., description="En liste av oppdaterte underenheter"
@@ -1947,7 +1947,7 @@ class FieldEmbedded7(BaseModel):
 
 class OppdateringerUnderenheter1(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_links: Optional[FieldLinks26] = Field(None, alias="_links")
     field_embedded: Optional[FieldEmbedded7] = Field(None, alias="_embedded")
@@ -1960,7 +1960,7 @@ class RollerTotalbestand(RootModel[bytes]):
 
 class Self25(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -1973,14 +1973,14 @@ class Self25(BaseModel):
 
 class FieldLinks27(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self25] = None
 
 
 class RolleRepresentant(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kode: str = Field(..., description="Koden", examples=["A-AK"])
     beskrivelse: str = Field(
@@ -1991,7 +1991,7 @@ class RolleRepresentant(BaseModel):
 
 class FieldEmbedded8(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     representanter: Sequence[RolleRepresentant] = Field(
         ..., description="En liste av rolle representanter"
@@ -2000,7 +2000,7 @@ class FieldEmbedded8(BaseModel):
 
 class Self26(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -2011,14 +2011,14 @@ class Self26(BaseModel):
 
 class FieldLinks28(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self26] = None
 
 
 class RolleRepresentanter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_embedded: Optional[FieldEmbedded8] = Field(None, alias="_embedded")
     field_links: Optional[FieldLinks28] = Field(None, alias="_links")
@@ -2026,7 +2026,7 @@ class RolleRepresentanter(BaseModel):
 
 class FieldEmbedded9(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     rollegruppetyper: Sequence[RolleRollegruppetype] = Field(
         ..., description="En liste av rollegruppetyper"
@@ -2035,7 +2035,7 @@ class FieldEmbedded9(BaseModel):
 
 class Self27(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -2046,14 +2046,14 @@ class Self27(BaseModel):
 
 class FieldLinks29(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self27] = None
 
 
 class RolleRollegruppetyper(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_embedded: Optional[FieldEmbedded9] = Field(None, alias="_embedded")
     field_links: Optional[FieldLinks29] = Field(None, alias="_links")
@@ -2061,7 +2061,7 @@ class RolleRollegruppetyper(BaseModel):
 
 class FieldEmbedded10(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     rolletyper: Sequence[RolleRolletype] = Field(
         ..., description="En liste av rolletyper"
@@ -2070,7 +2070,7 @@ class FieldEmbedded10(BaseModel):
 
 class Self28(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     href: str = Field(
         ...,
@@ -2081,14 +2081,14 @@ class Self28(BaseModel):
 
 class FieldLinks30(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     self: Optional[Self28] = None
 
 
 class RolleRolletyper(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     field_embedded: Optional[FieldEmbedded10] = Field(None, alias="_embedded")
     field_links: Optional[FieldLinks30] = Field(None, alias="_links")
@@ -2096,7 +2096,7 @@ class RolleRolletyper(BaseModel):
 
 class Vedtekter(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     frivilligRegistrerteVedtekter: bool = Field(
         ...,
@@ -2113,7 +2113,7 @@ class Vedtekter(BaseModel):
 
 class Relasjon(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     relasjonsrolleFra: Optional[str] = Field(
         None,
@@ -2140,7 +2140,7 @@ class Relasjon(BaseModel):
 
 class ICNPOKategori(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     kategori: str = Field(
         ...,
@@ -2165,7 +2165,7 @@ class ICNPOKategori(BaseModel):
 
 class Regnskapsrapportering(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     harPaatattSegRapporteringsplikt: bool = Field(
         ...,
@@ -2184,7 +2184,7 @@ class Regnskapsrapportering(BaseModel):
 
 class Paategning(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
     identifikatorInformasjonstype: Optional[str] = Field(
         None,

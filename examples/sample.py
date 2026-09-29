@@ -101,7 +101,7 @@ async def main():
             [org_numbers[0], org_numbers[1], org_numbers[2]]
         )
         for org_nr, entity in results.items():
-            if isinstance(entity, Exception):
+            if isinstance(entity, BrregAPIError):
                 print(f"❌ {org_nr}: Error - {entity}")
             else:
                 print(f"✅ {org_nr}: {entity.navn}")
@@ -122,8 +122,8 @@ async def main():
         logger.info("\n5. Searching for organizations")
         search_results = await client.search_enheter(navn="Microsoft")
         print(
-            f"Found {search_results.page.totalElements}\
-                  organizations matching 'Microsoft'"
+            f"Found {search_results.page.totalElements:.0f} "
+            "organizations matching 'Microsoft'"
         )
         for i, org in enumerate(search_results.field_embedded.enheter[:3], 1):
             print(f"  {i}. {org.navn} ({org.organisasjonsnummer})")
@@ -133,8 +133,8 @@ async def main():
         org_forms = await client.get_organisasjonsformer()
         org_forms_sample = list(org_forms.field_embedded.organisasjonsformer)[:3]
         print(
-            f"Found {len(org_forms.field_embedded.organisasjonsformer)}\
-                organization forms"
+            f"Found {len(org_forms.field_embedded.organisasjonsformer)} "
+            "organization forms"
         )
         for form in org_forms_sample:
             print(f"  • {form.kode}: {form.beskrivelse}")
